@@ -22,7 +22,7 @@ Project deals with control of vfd spindle. Aim of the work is to adopt practical
 | P01-02 | 220 V  | Vmax – dle štítku motoru. Používá se pro výpočet U/f poměru |
 | P07-00 | 8,6 A  | Motor rated current – dle štítku motoru |
 
-<img src="images/stitek_menice.png" alt="Štítek měniče" width="30%">
+> 📷 *Sem patří obrázek štítku měniče*
 
 ---
 
@@ -74,8 +74,7 @@ V PLC jsou vytvořeny tagy, které přes DQ aktivují signály MI vstupů. Na ta
 - Analogový výstup se zapojí na vstupy: **AVI** (PLC AO Ux+), **ACM** (PLC AO Ux–).
 - Přepínače **SW1** (PNP/NPN), **SW2** (AVI/ACI) jsou přepnuty směrem **nahoru**.
 
-<img src="images\rizeni_otacek_analog_1.png" alt="Štítek měniče" width="30%">
-<img src="images\rizeni_otacek_analog_2.png" alt="Štítek měniče" width="30%">
+> 📷 *Sem patří obrázek řízení měniče analogovým napětím*
 
 #### Zapojení motoru
 - Zapojení do **trojúhelníku**.
@@ -88,7 +87,7 @@ Rozpracovaný projekt na laptopu:
 `GenerateAQSignal_TIAP_9618_21.00.00.00_01.00.0001`
 
 ### Kde pokračovat
-- [ProjectKarel](https://chatgpt.com/c/69a4929c-a748-838a-8b3a-183a3cf06cb6) – nástroje pro kreslení zapojení
+- **ProjectKarel** – nástroje pro kreslení zapojení
 
 ---
 

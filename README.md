@@ -22,7 +22,7 @@ Project deals with control of vfd spindle. Aim of the work is to adopt practical
 | P01-02 | 220 V  | Vmax – dle štítku motoru. Používá se pro výpočet U/f poměru |
 | P07-00 | 8,6 A  | Motor rated current – dle štítku motoru |
 
-> 📷 *Sem patří obrázek štítku měniče*
+<img src="images/stitek_menice.png" alt="Štítek měniče" width="400">
 
 ---
 
@@ -74,7 +74,12 @@ V PLC jsou vytvořeny tagy, které přes DQ aktivují signály MI vstupů. Na ta
 - Analogový výstup se zapojí na vstupy: **AVI** (PLC AO Ux+), **ACM** (PLC AO Ux–).
 - Přepínače **SW1** (PNP/NPN), **SW2** (AVI/ACI) jsou přepnuty směrem **nahoru**.
 
-> 📷 *Sem patří obrázek řízení měniče analogovým napětím*
+<table>
+  <tr>
+    <td align="center"><img src="images/rizeni_otacek_analog_1.png" width="400"><br><em>Zapojení AVI</em></td>
+    <td align="center"><img src="images/rizeni_otacek_analog_2.png" width="400"><br><em>Přepínače SW1/SW2</em></td>
+  </tr>
+</table>
 
 #### Zapojení motoru
 - Zapojení do **trojúhelníku**.
@@ -169,77 +174,79 @@ sequenceDiagram
 ---
 
 ## Appendix 2 – Blok diagram (Mermaid)
+<!-- filepath: README.md -->
+<!-- ...existing code... -->
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'step'}}}%%
 flowchart LR
 
-    subgraph OBs
-        OB1[OB1 - Main Cycle]
-        OB35[OB35 - 10ms Interrupt]
-    end
+  subgraph OBs[Organizační bloky]
+    OB1[OB1 - Main Cycle]
+    OB35[OB35 - 10ms Interrupt]
+  end
 
-    subgraph IO_Layer
-        FC_IOR[FC_IO_Map_Read]
-        FC_IOW[FC_IO_Map_Write]
-        DB_IO[(DB_IO)]
-    end
+  subgraph IO_Layer[IO vrstva]
+    FC_IOR[FC_IO_Map_Read]
+    FC_IOW[FC_IO_Map_Write]
+    DB_IO[(DB_IO)]
+  end
 
-    subgraph Control_Layer
-        FB_SG[FB_SafetyGate]
-        DB_SAF[(DB_Safety)]
-        FB_DRV[FB_DriveCtrl]
-        DB_DRV[(DB_Drive)]
-        FB_LPSU[FB_LabPSU]
-        DB_LPSU[(DB_LabPSU)]
-    end
+  subgraph Control_Layer[Řízení]
+    FB_SG[FB_SafetyGate]
+    DB_SAF[(DB_Safety)]
 
-    subgraph Measurement_Layer
-        FB_TEMP[FB_Temp_PT1000]
-        FB_RPM[FB_RPM_Meas]
-        FB_VIB[FB_Vibration]
-        DB_MEAS[(DB_Meas)]
-    end
+    FB_DRV[FB_DriveCtrl]
+    DB_DRV[(DB_Drive)]
+  end
 
-    subgraph Diagnostics
-        FB_ALM[FB_AlarmMgr]
-        DB_ALM[(DB_Alarms)]
-    end
+  subgraph Measurement_Layer[Měření]
+    FB_TEMP[FB_Temp_PT1000]
+    FB_RPM[FB_RPM_Meas]
+    FB_VIB[FB_Vibration]
+    DB_MEAS[(DB_Meas)]
+  end
 
-    OB1 --> FC_IOR
-    FC_IOR --> DB_IO
+  subgraph Status_Layer[Status / HMI]
+    DB_STATUS[(DB_Status)]
+    HMI[HMI / Web page]
+  end
 
-    OB1 --> FB_SG
-    FB_SG --> DB_SAF
-    FB_SG --> DB_IO
+  subgraph Diagnostics[Diagnostika]
+    FB_ALM[FB_AlarmMgr]
+    DB_ALM[(DB_Alarms)]
+  end
 
-    OB1 --> FB_DRV
-    FB_DRV --> DB_DRV
-    FB_DRV --> DB_IO
-    FB_DRV --> DB_SAF
+  %% OB1 flow
+  OB1 --> FC_IOR --> DB_IO
 
-    OB1 --> FB_LPSU
-    FB_LPSU --> DB_LPSU
-    FB_LPSU --> DB_IO
-    FB_LPSU --> DB_SAF
+  OB1 --> FB_SG
+  FB_SG --> DB_SAF
+  FB_SG --> DB_IO
 
-    OB1 --> FB_TEMP
-    OB1 --> FB_RPM
-    OB1 --> FB_VIB
+  OB1 --> FB_DRV
+  FB_DRV --> DB_DRV
+  FB_DRV --> DB_IO
+  FB_DRV --> DB_SAF
+  FB_DRV --> DB_STATUS
 
-    FB_TEMP --> DB_MEAS
-    FB_RPM  --> DB_MEAS
-    FB_VIB  --> DB_MEAS
+  OB1 --> FB_TEMP --> DB_MEAS
+  OB1 --> FB_RPM  --> DB_MEAS
+  OB1 --> FB_VIB  --> DB_MEAS
 
-    OB1 --> FB_ALM
-    FB_ALM --> DB_ALM
-    FB_ALM --> DB_SAF
-    FB_ALM --> DB_DRV
-    FB_ALM --> DB_MEAS
+  OB1 --> FB_ALM
+  FB_ALM --> DB_ALM
+  FB_ALM --> DB_SAF
+  FB_ALM --> DB_DRV
+  FB_ALM --> DB_MEAS
 
-    OB1 --> FC_IOW
-    FC_IOW --> DB_IO
+  OB1 --> FC_IOW --> DB_IO
 
-    OB35 --> FB_LPSU
-    OB35 --> FB_RPM
+  %% HMI reads status
+  DB_STATUS --> HMI
+  DB_MEAS --> HMI
+  DB_ALM --> HMI
+
+  %% OB35 (time critical)
+  OB35 --> FB_RPM
 ```

@@ -6,92 +6,357 @@
   <title>Vfd-Spindle-PLC</title>
 
   <style>
-    body { font-family: Arial, sans-serif; margin: 18px; background: #f6f7f9; }
-    .card { background: #fff; border: 1px solid #e2e6ea; border-radius: 10px; padding: 14px; max-width: 720px; }
-    h1 { font-size: 20px; margin: 0 0 10px 0; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .field { margin: 10px 0; }
-    label { display: block; font-size: 13px; color: #333; margin-bottom: 6px; }
-    input[type="number"] { width: 220px; padding: 8px; border: 1px solid #cfd6dd; border-radius: 8px; }
-    .btn { padding: 9px 12px; border: 0; border-radius: 8px; background: #1f6feb; color: #fff; cursor: pointer; }
-    .btn:active { transform: translateY(1px); }
-    .chip { display: inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; background: #eef2ff; }
-    .ok { background: #e8fff0; }
-    .bad { background: #ffecec; }
-    .hint { font-size: 12px; color: #555; margin-top: 6px; }
-    .sep { height: 1px; background: #e9edf1; margin: 12px 0; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 18px;
+      background: #f4f6f8;
+      color: #1f2328;
+    }
+
+    .card {
+      max-width: 860px;
+      background: #ffffff;
+      border: 1px solid #d8dee4;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+    }
+
+    h2 {
+      margin: 18px 0 8px 0;
+      font-size: 18px;
+    }
+
+    .muted {
+      color: #57606a;
+      font-size: 13px;
+    }
+
+    .sep {
+      height: 1px;
+      background: #eaeef2;
+      margin: 16px 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .field {
+      margin: 10px 0;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    input[type="number"] {
+      width: 220px;
+      padding: 8px 10px;
+      border: 1px solid #c5ccd3;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .checkrow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #eef2f6;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .status-ok {
+      background: #e8fff0;
+      color: #116329;
+    }
+
+    .status-bad {
+      background: #ffe9e9;
+      color: #b42318;
+    }
+
+    .btn {
+      margin-top: 10px;
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 10px;
+      background: #0969da;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .box {
+      background: #f9fbfc;
+      border: 1px solid #e2e8ee;
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .calc {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #444;
+    }
+
+    .warn {
+      color: #9a6700;
+    }
+
+    .big-value {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 700px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      input[type="number"] {
+        width: 100%;
+        box-sizing: border-box;
+      }
+    }
   </style>
 </head>
 
 <body>
   <div class="card">
     <h1>Vfd-Spindle-PLC</h1>
+    <div class="muted">Jednoduchá AWP stránka pro test ovládání vřetena.</div>
 
-    <div class="field">
-      <span class="chip">EmergencyStop:</span>
-      <b class="chip bad">:="DB_IO".DI.EmergencyStop:</b>
-      <div class="hint">Hodnota se načítá z PLC (BOOL).</div>
+    <div class="sep"></div>
+
+    <h2>Aktuální stav</h2>
+    <div class="grid">
+      <div class="box">
+        <label>EmergencyStop</label>
+        <span class="status" id="emStopBadge">:="DB_IO".DI.EmergencyStop:</span>
+        <div class="muted">Stav načtený z PLC.</div>
+      </div>
+
+      <div class="box">
+        <label>Aktuálně zapsaná raw hodnota</label>
+        <span class="status" id="rawSpeedValue">:="DB_IO".AQ.SpeedVoltage:</span>
+        <div class="muted">Surová UINT hodnota uložená v PLC.</div>
+      </div>
     </div>
 
     <div class="sep"></div>
 
-    <!-- Povolení zápisu do konkrétních PLC tagů -->
+    <h2>Ovládání vřetena</h2>
+
+    <!-- Povolení zápisu do PLC tagů -->
     <!-- AWP_In_Variable Name='"DB_IO".AQ.SpeedVoltage' -->
     <!-- AWP_In_Variable Name='"DB_IO".DQ.RunForwardCmd' -->
     <!-- AWP_In_Variable Name='"DB_IO".DQ.ExternalFault' -->
 
-    <!-- Formulář pro zápis hodnot do PLC -->
-    <form method="post">
-      <div class="row">
-        <div class="field">
-          <label>SpeedVoltage (UINT)</label>
-          <input
-            type="number"
-            name='"DB_IO".AQ.SpeedVoltage'
-            min="0"
-            max="65535"
-            value=':="DB_IO".AQ.SpeedVoltage:'>
-          <div class="hint">Rozsah 0..65535</div>
+    <form method="post" onsubmit="return prepareSubmit();">
+      <div class="grid">
+        <div class="box">
+          <div class="field">
+            <label for="rpmInput">Požadované otáčky</label>
+            <input
+              id="rpmInput"
+              type="number"
+              min="0"
+              max="18000"
+              step="1"
+              value="0"
+              oninput="syncFromNumber()">
+
+            <input
+              id="rpmSlider"
+              type="range"
+              min="0"
+              max="18000"
+              step="100"
+              value="0"
+              oninput="syncFromSlider()">
+
+            <div class="big-value"><span id="rpmDisplay">0</span> rpm</div>
+
+            <div class="calc">
+              Přepočtená hodnota pro PLC:
+              <b id="previewUint">0</b>
+            </div>
+
+            <div class="calc muted">
+              Přepočet 0 až 18000 rpm na 0 až 65535.
+            </div>
+
+            <div class="calc warn" id="clampInfo"></div>
+          </div>
+
+          <input type="hidden" id="speedUintHidden" name='"DB_IO".AQ.SpeedVoltage' value="0">
         </div>
 
-        <div class="field" style="min-width:220px;">
-          <label>RunForwardCmd (BOOL)</label>
+        <div class="box">
+          <div class="field">
+            <label>Řídicí bity</label>
 
-          <!-- Skrytá nula zajistí, že při nezaškrtnutí se pošle 0 -->
-          <input type="hidden" name='"DB_IO".DQ.RunForwardCmd' value="0">
-          <input type="checkbox" name='"DB_IO".DQ.RunForwardCmd' value="1">
-          <div class="hint">Zaškrtnuto = 1, nezaškrtnuto = 0</div>
-        </div>
+            <input type="hidden" name='"DB_IO".DQ.RunForwardCmd' value="0">
+            <div class="checkrow">
+              <input type="checkbox" id="runfwd" name='"DB_IO".DQ.RunForwardCmd' value="1">
+              <label for="runfwd" style="margin:0;font-weight:normal;">RunForwardCmd</label>
+            </div>
 
-        <div class="field" style="min-width:220px;">
-          <label>ExternalFault (BOOL)</label>
+            <input type="hidden" name='"DB_IO".DQ.ExternalFault' value="0">
+            <div class="checkrow">
+              <input type="checkbox" id="extfault" name='"DB_IO".DQ.ExternalFault' value="1">
+              <label for="extfault" style="margin:0;font-weight:normal;">ExternalFault</label>
+            </div>
+          </div>
 
-          <input type="hidden" name='"DB_IO".DQ.ExternalFault' value="0">
-          <input type="checkbox" name='"DB_IO".DQ.ExternalFault' value="1">
-          <div class="hint">Zaškrtnuto = 1, nezaškrtnuto = 0</div>
+          <div class="sep"></div>
+
+          <div class="field">
+            <label>Diagnostika</label>
+            <div>RunForwardCmd: <b>:="DB_IO".DQ.RunForwardCmd:</b></div>
+            <div>ExternalFault: <b>:="DB_IO".DQ.ExternalFault:</b></div>
+            <div>SpeedVoltage: <b>:="DB_IO".AQ.SpeedVoltage:</b></div>
+            <div class="muted" id="estimatedRpmText">Odhad otáček se dopočítá po načtení stránky.</div>
+          </div>
         </div>
       </div>
 
-      <div class="sep"></div>
-
       <button class="btn" type="submit">Zapsat do PLC</button>
-      <span class="hint">Po odeslání se provede POST a web server zapíše hodnoty do tagů.</span>
     </form>
 
     <div class="sep"></div>
 
-    <div class="field">
-      <span class="chip">Aktuální hodnoty:</span>
-      <div class="hint">
-        SpeedVoltage = <b>:="DB_IO".AQ.SpeedVoltage:</b><br>
-        RunForwardCmd = <b>:="DB_IO".DQ.RunForwardCmd:</b><br>
-        ExternalFault = <b>:="DB_IO".DQ.ExternalFault:</b>
-      </div>
-    </div>
-
-    <div class="hint">
-      Poznámka: soubor ulož jako UTF-8.
+    <div class="muted">
+      Soubor ulož jako UTF-8.
     </div>
   </div>
+
+  <script>
+    var MAX_RPM = 18000;
+    var MAX_UINT = 65535;
+
+    function clamp(value, min, max) {
+      if (value < min) return min;
+      if (value > max) return max;
+      return value;
+    }
+
+    function rpmToUint(rpm) {
+      var limited = clamp(rpm, 0, MAX_RPM);
+      return Math.round((limited / MAX_RPM) * MAX_UINT);
+    }
+
+    function uintToRpm(raw) {
+      var limited = clamp(raw, 0, MAX_UINT);
+      return Math.round((limited / MAX_UINT) * MAX_RPM);
+    }
+
+    function updateCalculatedValues(rpm) {
+      var limited = clamp(rpm, 0, MAX_RPM);
+      var raw = rpmToUint(limited);
+
+      document.getElementById("rpmDisplay").textContent = limited;
+      document.getElementById("previewUint").textContent = raw;
+      document.getElementById("speedUintHidden").value = raw;
+
+      if (rpm !== limited) {
+        document.getElementById("clampInfo").textContent =
+          "Zadaná hodnota byla omezena do rozsahu 0 až " + MAX_RPM + " rpm.";
+      } else {
+        document.getElementById("clampInfo").textContent = "";
+      }
+    }
+
+    function syncFromNumber() {
+      var rpmInput = document.getElementById("rpmInput");
+      var rpmSlider = document.getElementById("rpmSlider");
+
+      var rpm = parseInt(rpmInput.value, 10);
+      if (isNaN(rpm)) {
+        rpm = 0;
+      }
+
+      rpm = clamp(rpm, 0, MAX_RPM);
+      rpmInput.value = rpm;
+      rpmSlider.value = rpm;
+
+      updateCalculatedValues(rpm);
+    }
+
+    function syncFromSlider() {
+      var rpmInput = document.getElementById("rpmInput");
+      var rpmSlider = document.getElementById("rpmSlider");
+
+      var rpm = parseInt(rpmSlider.value, 10);
+      if (isNaN(rpm)) {
+        rpm = 0;
+      }
+
+      rpmInput.value = rpm;
+      updateCalculatedValues(rpm);
+    }
+
+    function prepareSubmit() {
+      syncFromNumber();
+      return true;
+    }
+
+    function showEstimatedCurrentRpm() {
+      var rawText = document.getElementById("rawSpeedValue").textContent;
+      var raw = parseInt(rawText, 10);
+
+      if (!isNaN(raw)) {
+        var rpm = uintToRpm(raw);
+        document.getElementById("estimatedRpmText").textContent =
+          "Odhad aktuálně nastavených otáček podle raw hodnoty: " + rpm + " rpm.";
+      }
+    }
+
+    function updateEmergencyStopBadge() {
+      var badge = document.getElementById("emStopBadge");
+      var value = badge.textContent.replace(/\s+/g, "");
+
+      if (value === "1" || value.toLowerCase() === "true") {
+        badge.className = "status status-bad";
+      } else {
+        badge.className = "status status-ok";
+      }
+    }
+
+    window.onload = function() {
+      syncFromNumber();
+      showEstimatedCurrentRpm();
+      updateEmergencyStopBadge();
+    };
+  </script>
 </body>
 </html>

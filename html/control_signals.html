@@ -14,7 +14,7 @@
     }
 
     .card {
-      max-width: 860px;
+      max-width: 1100px;
       background: #ffffff;
       border: 1px solid #d8dee4;
       border-radius: 12px;
@@ -46,6 +46,12 @@
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .grid3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 14px;
     }
 
@@ -127,18 +133,14 @@
       color: #444;
     }
 
-    .warn {
-      color: #9a6700;
-    }
-
     .big-value {
       font-size: 28px;
       font-weight: bold;
       margin-top: 10px;
     }
 
-    @media (max-width: 700px) {
-      .grid {
+    @media (max-width: 900px) {
+      .grid, .grid3 {
         grid-template-columns: 1fr;
       }
 
@@ -153,22 +155,22 @@
 <body>
   <div class="card">
     <h1>Vfd-Spindle-PLC</h1>
-    <div class="muted">Jednoduchá AWP stránka pro test ovládání vřetena.</div>
+    <div class="muted">AWP stránka pro test ovládání vřetena a laboratorního zdroje.</div>
 
     <div class="sep"></div>
 
-    <h2>Aktuální stav</h2>
+    <h2>Aktuální stav vřetena</h2>
     <div class="grid">
       <div class="box">
-        <label>EmergencyStop</label>
-        <span class="status" id="emStopBadge">:="DB_IO".DI.EmergencyStop:</span>
+        <label>PermitMotion</label>
+        <span class="status" id="permitMotionBadge">:="DataTest".PermitMotion:</span>
         <div class="muted">Stav načtený z PLC.</div>
       </div>
 
       <div class="box">
-        <label>Aktuálně zapsaná raw hodnota</label>
-        <span class="status" id="rawSpeedValue">:="DB_IO".AQ.SpeedVoltage:</span>
-        <div class="muted">Surová UINT hodnota uložená v PLC.</div>
+        <label>Aktuálně nastavené otáčky</label>
+        <span class="status" id="rawSpeedValue">:="DataTest".Speed_RPM:</span>
+        <div class="muted">Hodnota REAL v rpm.</div>
       </div>
     </div>
 
@@ -177,22 +179,24 @@
     <h2>Ovládání vřetena</h2>
 
     <!-- Povolení zápisu do PLC tagů -->
-    <!-- AWP_In_Variable Name='"DB_IO".AQ.SpeedVoltage' -->
-    <!-- AWP_In_Variable Name='"DB_IO".DQ.RunForwardCmd' -->
-    <!-- AWP_In_Variable Name='"DB_IO".DQ.ExternalFault' -->
+    <!-- AWP_In_Variable Name='"DataTest".ExternalFault' -->
+    <!-- AWP_In_Variable Name='"DataTest".Speed_RPM' -->
+    <!-- AWP_In_Variable Name='"DataTest".PermitMotion' -->
+    <!-- AWP_In_Variable Name='"DataTest".RunForward' -->
 
     <form method="post" onsubmit="return prepareSubmit();">
       <div class="grid">
         <div class="box">
           <div class="field">
-            <label for="rpmInput">Požadované otáčky</label>
+            <label for="rpmInput">Požadované otáčky [rpm]</label>
             <input
               id="rpmInput"
               type="number"
+              name='"DataTest".Speed_RPM'
               min="0"
               max="18000"
               step="1"
-              value="0"
+              value=':="DataTest".Speed_RPM:'
               oninput="syncFromNumber()">
 
             <input
@@ -206,34 +210,31 @@
 
             <div class="big-value"><span id="rpmDisplay">0</span> rpm</div>
 
-            <div class="calc">
-              Přepočtená hodnota pro PLC:
-              <b id="previewUint">0</b>
-            </div>
-
             <div class="calc muted">
-              Přepočet 0 až 18000 rpm na 0 až 65535.
+              Přímý zápis do <b>DataTest.Speed_RPM</b> typu REAL.
             </div>
-
-            <div class="calc warn" id="clampInfo"></div>
           </div>
-
-          <input type="hidden" id="speedUintHidden" name='"DB_IO".AQ.SpeedVoltage' value="0">
         </div>
 
         <div class="box">
           <div class="field">
-            <label>Řídicí bity</label>
+            <label>Řídicí bity vřetena</label>
 
-            <input type="hidden" name='"DB_IO".DQ.RunForwardCmd' value="0">
+            <input type="hidden" name='"DataTest".PermitMotion' value="0">
             <div class="checkrow">
-              <input type="checkbox" id="runfwd" name='"DB_IO".DQ.RunForwardCmd' value="1">
-              <label for="runfwd" style="margin:0;font-weight:normal;">RunForwardCmd</label>
+              <input type="checkbox" id="permitMotion" name='"DataTest".PermitMotion' value="1">
+              <label for="permitMotion" style="margin:0;font-weight:normal;">PermitMotion</label>
             </div>
 
-            <input type="hidden" name='"DB_IO".DQ.ExternalFault' value="0">
+            <input type="hidden" name='"DataTest".RunForward' value="0">
             <div class="checkrow">
-              <input type="checkbox" id="extfault" name='"DB_IO".DQ.ExternalFault' value="1">
+              <input type="checkbox" id="runForward" name='"DataTest".RunForward' value="1">
+              <label for="runForward" style="margin:0;font-weight:normal;">RunForward</label>
+            </div>
+
+            <input type="hidden" name='"DataTest".ExternalFault' value="0">
+            <div class="checkrow">
+              <input type="checkbox" id="extfault" name='"DataTest".ExternalFault' value="1">
               <label for="extfault" style="margin:0;font-weight:normal;">ExternalFault</label>
             </div>
           </div>
@@ -241,17 +242,155 @@
           <div class="sep"></div>
 
           <div class="field">
-            <label>Diagnostika</label>
-            <div>RunForwardCmd: <b>:="DB_IO".DQ.RunForwardCmd:</b></div>
-            <div>ExternalFault: <b>:="DB_IO".DQ.ExternalFault:</b></div>
-            <div>SpeedVoltage: <b>:="DB_IO".AQ.SpeedVoltage:</b></div>
-            <div class="muted" id="estimatedRpmText">Odhad otáček se dopočítá po načtení stránky.</div>
+            <label>Diagnostika vřetena</label>
+            <div>PermitMotion: <b>:="DataTest".PermitMotion:</b></div>
+            <div>RunForward: <b>:="DataTest".RunForward:</b></div>
+            <div>ExternalFault: <b>:="DataTest".ExternalFault:</b></div>
+            <div>Speed_RPM: <b>:="DataTest".Speed_RPM:</b></div>
           </div>
         </div>
       </div>
 
-      <button class="btn" type="submit">Zapsat do PLC</button>
+      <button class="btn" type="submit">Zapsat nastavení vřetena</button>
     </form>
+
+    <div class="sep"></div>
+
+    <h2>Laboratorní zdroj</h2>
+
+    <!-- Povolení zápisu do PLC tagů pro LabPSU_Control -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".Enable' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".PermitOutput' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".Mode' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".Cycle_s' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".BaseVoltage_V' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".CurrentOffset_A' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".DebugAmplitude_A' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".DebugFrequency_Hz' -->
+    <!-- AWP_In_Variable Name='"LabPSU_Control".ConstCurrent_A' -->
+
+    <form method="post">
+      <div class="grid3">
+        <div class="box">
+          <div class="field">
+            <label>Základní povely</label>
+
+            <input type="hidden" name='"LabPSU_Control".Enable' value="0">
+            <div class="checkrow">
+              <input type="checkbox" id="psuEnable" name='"LabPSU_Control".Enable' value="1">
+              <label for="psuEnable" style="margin:0;font-weight:normal;">Enable</label>
+            </div>
+
+            <input type="hidden" name='"LabPSU_Control".PermitOutput' value="0">
+            <div class="checkrow">
+              <input type="checkbox" id="psuPermitOutput" name='"LabPSU_Control".PermitOutput' value="1">
+              <label for="psuPermitOutput" style="margin:0;font-weight:normal;">PermitOutput</label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="psuMode">Mode (USInt)</label>
+            <input
+              id="psuMode"
+              type="number"
+              name='"LabPSU_Control".Mode'
+              min="0"
+              max="255"
+              step="1"
+              value=':="LabPSU_Control".Mode:'>
+          </div>
+
+          <div class="field">
+            <label for="psuCycle">Cycle_s</label>
+            <input
+              id="psuCycle"
+              type="number"
+              name='"LabPSU_Control".Cycle_s'
+              step="0.001"
+              value=':="LabPSU_Control".Cycle_s:'>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="field">
+            <label for="psuBaseVoltage">BaseVoltage_V</label>
+            <input
+              id="psuBaseVoltage"
+              type="number"
+              name='"LabPSU_Control".BaseVoltage_V'
+              step="0.01"
+              value=':="LabPSU_Control".BaseVoltage_V:'>
+          </div>
+
+          <div class="field">
+            <label for="psuCurrentOffset">CurrentOffset_A</label>
+            <input
+              id="psuCurrentOffset"
+              type="number"
+              name='"LabPSU_Control".CurrentOffset_A'
+              step="0.01"
+              value=':="LabPSU_Control".CurrentOffset_A:'>
+          </div>
+
+          <div class="field">
+            <label for="psuDebugAmplitude">DebugAmplitude_A</label>
+            <input
+              id="psuDebugAmplitude"
+              type="number"
+              name='"LabPSU_Control".DebugAmplitude_A'
+              step="0.01"
+              value=':="LabPSU_Control".DebugAmplitude_A:'>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="field">
+            <label for="psuDebugFrequency">DebugFrequency_Hz</label>
+            <input
+              id="psuDebugFrequency"
+              type="number"
+              name='"LabPSU_Control".DebugFrequency_Hz'
+              step="0.01"
+              value=':="LabPSU_Control".DebugFrequency_Hz:'>
+          </div>
+
+          <div class="field">
+            <label for="psuConstCurrent">ConstCurrent_A</label>
+            <input
+              id="psuConstCurrent"
+              type="number"
+              name='"LabPSU_Control".ConstCurrent_A'
+              step="0.01"
+              value=':="LabPSU_Control".ConstCurrent_A:'>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn" type="submit">Zapsat nastavení zdroje</button>
+    </form>
+
+    <div class="sep"></div>
+
+    <h2>Diagnostika laboratorního zdroje</h2>
+    <div class="grid3">
+      <div class="box">
+        <div>Enable: <b>:="LabPSU_Control".Enable:</b></div>
+        <div>PermitOutput: <b>:="LabPSU_Control".PermitOutput:</b></div>
+        <div>Mode: <b>:="LabPSU_Control".Mode:</b></div>
+        <div>Cycle_s: <b>:="LabPSU_Control".Cycle_s:</b></div>
+      </div>
+
+      <div class="box">
+        <div>BaseVoltage_V: <b>:="LabPSU_Control".BaseVoltage_V:</b></div>
+        <div>CurrentOffset_A: <b>:="LabPSU_Control".CurrentOffset_A:</b></div>
+        <div>DebugAmplitude_A: <b>:="LabPSU_Control".DebugAmplitude_A:</b></div>
+      </div>
+
+      <div class="box">
+        <div>DebugFrequency_Hz: <b>:="LabPSU_Control".DebugFrequency_Hz:</b></div>
+        <div>ConstCurrent_A: <b>:="LabPSU_Control".ConstCurrent_A:</b></div>
+      </div>
+    </div>
 
     <div class="sep"></div>
 
@@ -261,68 +400,40 @@
   </div>
 
   <script>
-    var MAX_RPM = 18000;
-    var MAX_UINT = 65535;
-
     function clamp(value, min, max) {
       if (value < min) return min;
       if (value > max) return max;
       return value;
     }
 
-    function rpmToUint(rpm) {
-      var limited = clamp(rpm, 0, MAX_RPM);
-      return Math.round((limited / MAX_RPM) * MAX_UINT);
-    }
-
-    function uintToRpm(raw) {
-      var limited = clamp(raw, 0, MAX_UINT);
-      return Math.round((limited / MAX_UINT) * MAX_RPM);
-    }
-
-    function updateCalculatedValues(rpm) {
-      var limited = clamp(rpm, 0, MAX_RPM);
-      var raw = rpmToUint(limited);
-
-      document.getElementById("rpmDisplay").textContent = limited;
-      document.getElementById("previewUint").textContent = raw;
-      document.getElementById("speedUintHidden").value = raw;
-
-      if (rpm !== limited) {
-        document.getElementById("clampInfo").textContent =
-          "Zadaná hodnota byla omezena do rozsahu 0 až " + MAX_RPM + " rpm.";
-      } else {
-        document.getElementById("clampInfo").textContent = "";
-      }
-    }
-
     function syncFromNumber() {
       var rpmInput = document.getElementById("rpmInput");
       var rpmSlider = document.getElementById("rpmSlider");
+      var rpmDisplay = document.getElementById("rpmDisplay");
 
-      var rpm = parseInt(rpmInput.value, 10);
+      var rpm = parseFloat(rpmInput.value);
       if (isNaN(rpm)) {
         rpm = 0;
       }
 
-      rpm = clamp(rpm, 0, MAX_RPM);
+      rpm = clamp(rpm, 0, 18000);
       rpmInput.value = rpm;
       rpmSlider.value = rpm;
-
-      updateCalculatedValues(rpm);
+      rpmDisplay.textContent = Math.round(rpm);
     }
 
     function syncFromSlider() {
       var rpmInput = document.getElementById("rpmInput");
       var rpmSlider = document.getElementById("rpmSlider");
+      var rpmDisplay = document.getElementById("rpmDisplay");
 
-      var rpm = parseInt(rpmSlider.value, 10);
+      var rpm = parseFloat(rpmSlider.value);
       if (isNaN(rpm)) {
         rpm = 0;
       }
 
       rpmInput.value = rpm;
-      updateCalculatedValues(rpm);
+      rpmDisplay.textContent = Math.round(rpm);
     }
 
     function prepareSubmit() {
@@ -330,32 +441,33 @@
       return true;
     }
 
-    function showEstimatedCurrentRpm() {
-      var rawText = document.getElementById("rawSpeedValue").textContent;
-      var raw = parseInt(rawText, 10);
-
-      if (!isNaN(raw)) {
-        var rpm = uintToRpm(raw);
-        document.getElementById("estimatedRpmText").textContent =
-          "Odhad aktuálně nastavených otáček podle raw hodnoty: " + rpm + " rpm.";
-      }
-    }
-
-    function updateEmergencyStopBadge() {
-      var badge = document.getElementById("emStopBadge");
+    function updatePermitMotionBadge() {
+      var badge = document.getElementById("permitMotionBadge");
       var value = badge.textContent.replace(/\s+/g, "");
 
       if (value === "1" || value.toLowerCase() === "true") {
-        badge.className = "status status-bad";
-      } else {
         badge.className = "status status-ok";
+      } else {
+        badge.className = "status status-bad";
+      }
+    }
+
+    function initCurrentRpm() {
+      var rawText = document.getElementById("rawSpeedValue").textContent;
+      var rpm = parseFloat(rawText);
+
+      if (!isNaN(rpm)) {
+        document.getElementById("rpmInput").value = rpm;
+        document.getElementById("rpmSlider").value = clamp(rpm, 0, 18000);
+        document.getElementById("rpmDisplay").textContent = Math.round(rpm);
+      } else {
+        syncFromNumber();
       }
     }
 
     window.onload = function() {
-      syncFromNumber();
-      showEstimatedCurrentRpm();
-      updateEmergencyStopBadge();
+      initCurrentRpm();
+      updatePermitMotionBadge();
     };
   </script>
 </body>

@@ -11,7 +11,8 @@
 |     |        | DQ3          | [Měnič] MI3           | Fault reset |
 |     |        | DQ4          | [Měnič] MI4           | Multi speed 1 |
 |     |        | DQ5          | [Měnič] MI5           | External Fault |
-|     |        | DQ6          | [Labor. zdroj] (Output OFF / Enable)          |  na LAbo |
+|     |        | DQ6          | [Labor. zdroj] (Output OFF / Enable)          |  Vypíná / zapíná laboratorní zdroj |
+|     |        | DQ7          | [Labor. zdroj] Spinaní LED v emergency tlačítku         |  V případě emergency poruchy rozvítí LED na tlačítku |
 |     |        | DI1+, DI1-  |               | Čtení teploty z DI RTD |
 |     |        | DI2          |               | Čtení otáček pomocí modulu DI high speed. |
 |     |        | DI3          |               | Senzor vibrací je připojen přes IO Link. |

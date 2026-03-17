@@ -89,10 +89,14 @@ V PLC jsou vytvořeny tagy, které přes DQ aktivují signály MI vstupů. Na ta
 ## TIA Project
 
 Rozpracovaný projekt na laptopu:
-`GenerateAQSignal_TIAP_9618_21.00.00.00_01.00.0001`
+- d:\spindle-vfd-control\tia\vfd-spindel-plc_v20\
+- TIA portal jsem pouzil d:\DS\V20_UPD1_WinCC\, ktery ma nainstalovany WinCC. TIA jsem stahl z \\ad001.siemens.net\dfs001\File\CZ\ADV D EU CZ PDS1 CSP\PLC\Comm PLS\TIA\V20_UPD1_WinCC.7z\
 
 ### Kde pokračovat
-- **ProjectKarel** – nástroje pro kreslení zapojení
+- Pripravit HMI panel
+  - Vymyslet strukturu obrazovek
+  - Zapsat a vycist hodnoty z PLC DB
+  - Rozchodit HMI panel 
 
 ---
 

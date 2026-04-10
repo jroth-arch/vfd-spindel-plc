@@ -16,4 +16,5 @@
 |     |        | DI1+, DI1-  |               | Čtení teploty z DI RTD |
 |     |        | DI2          |               | Čtení otáček pomocí modulu DI high speed. |
 |     |        | DI3          |               | Senzor vibrací je připojen přes IO Link. |
-|     |        | DI4          |               | Výstup ze safety relátka OMRON. |
+|     |        | DI4          |               | Výstup ze safety relátka OMRON |
+|     |        | DI5          |               | Výstup ze safety tlačítka |

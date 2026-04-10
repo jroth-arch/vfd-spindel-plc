@@ -4,88 +4,122 @@
   <meta http-equiv="content-type" content="text/html; charset=utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vfd-Spindle-PLC</title>
-
   <style>
+    * { box-sizing: border-box; }
     body {
+      margin: 0;
       font-family: Arial, sans-serif;
-      margin: 18px;
       background: #f4f6f8;
       color: #1f2328;
     }
-
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+    .sidebar {
+      width: 240px;
+      background: #1f2937;
+      color: #fff;
+      padding: 20px 16px;
+      flex-shrink: 0;
+    }
+    .sidebar h1 {
+      font-size: 22px;
+      margin: 0 0 6px 0;
+    }
+    .sidebar .sub {
+      font-size: 13px;
+      color: #cbd5e1;
+      margin-bottom: 20px;
+    }
+    .navbtn {
+      display: block;
+      width: 100%;
+      margin: 0 0 10px 0;
+      padding: 12px 14px;
+      border: 0;
+      border-radius: 10px;
+      text-align: left;
+      background: #334155;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .navbtn.active {
+      background: #0ea5e9;
+    }
+    .content {
+      flex: 1;
+      padding: 22px;
+    }
+    .page {
+      display: none;
+    }
+    .page.active {
+      display: block;
+    }
     .card {
-      max-width: 1100px;
-      background: #ffffff;
+      background: #fff;
       border: 1px solid #d8dee4;
       border-radius: 12px;
       padding: 18px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      max-width: 1100px;
     }
-
-    h1 {
+    h2 {
       margin: 0 0 8px 0;
       font-size: 24px;
     }
-
-    h2 {
+    h3 {
       margin: 18px 0 8px 0;
       font-size: 18px;
     }
-
     .muted {
       color: #57606a;
       font-size: 13px;
     }
-
     .sep {
       height: 1px;
       background: #eaeef2;
       margin: 16px 0;
     }
-
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 14px;
     }
-
-    .grid3 {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 14px;
+    .box {
+      background: #f9fbfc;
+      border: 1px solid #e2e8ee;
+      border-radius: 10px;
+      padding: 12px;
     }
-
     .field {
       margin: 10px 0;
     }
-
     label {
       display: block;
       margin-bottom: 6px;
       font-size: 14px;
       font-weight: bold;
     }
-
     input[type="number"] {
-      width: 220px;
+      width: 240px;
       padding: 8px 10px;
       border: 1px solid #c5ccd3;
       border-radius: 8px;
       font-size: 14px;
     }
-
     input[type="range"] {
       width: 100%;
       margin-top: 8px;
     }
-
     .checkrow {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-top: 8px;
     }
-
     .status {
       display: inline-block;
       padding: 8px 12px;
@@ -94,19 +128,17 @@
       font-size: 14px;
       font-weight: bold;
     }
-
     .status-ok {
       background: #e8fff0;
       color: #116329;
     }
-
     .status-bad {
       background: #ffe9e9;
       color: #b42318;
     }
-
     .btn {
       margin-top: 10px;
+      margin-right: 8px;
       padding: 10px 16px;
       border: 0;
       border-radius: 10px;
@@ -115,359 +147,406 @@
       font-size: 14px;
       cursor: pointer;
     }
-
-    .btn:active {
-      transform: translateY(1px);
+    .btn.secondary {
+      background: #475569;
     }
-
-    .box {
-      background: #f9fbfc;
-      border: 1px solid #e2e8ee;
-      border-radius: 10px;
-      padding: 12px;
-    }
-
-    .calc {
-      margin-top: 8px;
-      font-size: 13px;
-      color: #444;
-    }
-
     .big-value {
       font-size: 28px;
       font-weight: bold;
       margin-top: 10px;
     }
-
+    .toggle-wrap {
+      margin-top: 10px;
+    }
+    .toggle-switch {
+      width: 74px;
+      height: 38px;
+      border-radius: 999px;
+      background: #cbd5e1;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .toggle-switch.active {
+      background: #22c55e;
+    }
+    .toggle-switch.safety-good.active {
+      background: #22c55e;
+    }
+    .toggle-switch.safety-bad.active {
+      background: #ef4444;
+    }
+    .toggle-knob {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #ffffff;
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      transition: left 0.2s ease;
+    }
+    .toggle-switch.active .toggle-knob {
+      left: 40px;
+    }
     @media (max-width: 900px) {
-      .grid, .grid3 {
-        grid-template-columns: 1fr;
-      }
-
-      input[type="number"] {
-        width: 100%;
-        box-sizing: border-box;
-      }
+      .layout { flex-direction: column; }
+      .sidebar { width: 100%; }
+      .grid { grid-template-columns: 1fr; }
+      input[type="number"] { width: 100%; }
     }
   </style>
 </head>
-
 <body>
-  <div class="card">
-    <h1>Vfd-Spindle-PLC</h1>
-    <div class="muted">AWP stránka pro test ovládání vřetena a laboratorního zdroje.</div>
-
-    <div class="sep"></div>
-
-    <h2>Aktuální stav vřetena</h2>
-    <div class="grid">
-      <div class="box">
-        <label>PermitMotion</label>
-        <span class="status" id="permitMotionBadge">:="DataTest".PermitMotion:</span>
-        <div class="muted">Stav načtený z PLC.</div>
-      </div>
-
-      <div class="box">
-        <label>Aktuálně nastavené otáčky</label>
-        <span class="status" id="rawSpeedValue">:="DataTest".Speed_RPM:</span>
-        <div class="muted">Hodnota REAL v rpm.</div>
-      </div>
+  <div class="layout">
+    <div class="sidebar">
+      <h1>Vfd-Spindle-PLC</h1>
+      <div class="sub">Testovací AWP web pro PLCSIM Advanced</div>
+      <button class="navbtn active" onclick="showPage('page-spindle', this)">Vřeteno</button>
+      <button class="navbtn" onclick="showPage('page-safety', this)">Safety Gate Test</button>
+      <button class="navbtn" onclick="showPage('page-psu', this)">Zdroj</button>
     </div>
 
-    <div class="sep"></div>
+    <div class="content">
+      <div id="page-spindle" class="page active">
+        <div class="card">
+          <h2>Vřeteno</h2>
+          <div class="muted">Zápis do DB_HMI.Spindle a čtení stavů z DB_IO a DB_Status.</div>
 
-    <h2>Ovládání vřetena</h2>
+          <div class="sep"></div>
 
-    <!-- Povolení zápisu do PLC tagů -->
-    <!-- AWP_In_Variable Name='"DataTest".ExternalFault' -->
-    <!-- AWP_In_Variable Name='"DataTest".Speed_RPM' -->
-    <!-- AWP_In_Variable Name='"DataTest".PermitMotion' -->
-    <!-- AWP_In_Variable Name='"DataTest".RunForward' -->
-
-    <form method="post" onsubmit="return prepareSubmit();">
-      <div class="grid">
-        <div class="box">
-          <div class="field">
-            <label for="rpmInput">Požadované otáčky [rpm]</label>
-            <input
-              id="rpmInput"
-              type="number"
-              name='"DataTest".Speed_RPM'
-              min="0"
-              max="18000"
-              step="1"
-              value=':="DataTest".Speed_RPM:'
-              oninput="syncFromNumber()">
-
-            <input
-              id="rpmSlider"
-              type="range"
-              min="0"
-              max="18000"
-              step="100"
-              value="0"
-              oninput="syncFromSlider()">
-
-            <div class="big-value"><span id="rpmDisplay">0</span> rpm</div>
-
-            <div class="calc muted">
-              Přímý zápis do <b>DataTest.Speed_RPM</b> typu REAL.
-            </div>
-          </div>
-        </div>
-
-        <div class="box">
-          <div class="field">
-            <label>Řídicí bity vřetena</label>
-
-            <input type="hidden" name='"DataTest".PermitMotion' value="0">
-            <div class="checkrow">
-              <input type="checkbox" id="permitMotion" name='"DataTest".PermitMotion' value="1">
-              <label for="permitMotion" style="margin:0;font-weight:normal;">PermitMotion</label>
-            </div>
-
-            <input type="hidden" name='"DataTest".RunForward' value="0">
-            <div class="checkrow">
-              <input type="checkbox" id="runForward" name='"DataTest".RunForward' value="1">
-              <label for="runForward" style="margin:0;font-weight:normal;">RunForward</label>
-            </div>
-
-            <input type="hidden" name='"DataTest".ExternalFault' value="0">
-            <div class="checkrow">
-              <input type="checkbox" id="extfault" name='"DataTest".ExternalFault' value="1">
-              <label for="extfault" style="margin:0;font-weight:normal;">ExternalFault</label>
+          <h3>Aktuální stav</h3>
+          <div class="grid">
+            <div class="box">
+              <div>DO_RunForward: <b>:="DB_IO".DQ.RunForwardCmd:</b></div>
+              <div>AQ1_Voltage_0_10V: <b>:="DB_IO".AQ.SpeedVoltage:</b> (cca RPM)</div>
+              <div>StatusText: <b>:="DB_Status".Spindel.StatusText:</b></div>
             </div>
           </div>
 
           <div class="sep"></div>
 
-          <div class="field">
-            <label>Diagnostika vřetena</label>
-            <div>PermitMotion: <b>:="DataTest".PermitMotion:</b></div>
-            <div>RunForward: <b>:="DataTest".RunForward:</b></div>
-            <div>ExternalFault: <b>:="DataTest".ExternalFault:</b></div>
-            <div>Speed_RPM: <b>:="DataTest".Speed_RPM:</b></div>
+          <!-- AWP_In_Variable Name='"DB_HMI".Spindle.Start' -->
+          <!-- AWP_In_Variable Name='"DB_HMI".Spindle.Stop' -->
+          <!-- AWP_In_Variable Name='"DB_HMI".Spindle.ResetFault' -->
+          <!-- AWP_In_Variable Name='"DB_HMI".Spindle.Speed_RPM' -->
+
+          <h3>Start a Stop</h3>
+          <div class="grid">
+            <form id="startForm" method="post">
+              <div class="box">
+                <label>Start</label>
+                <input type="hidden" id="startHidden" name='"DB_HMI".Spindle.Start' value="0">
+                <div class="toggle-wrap">
+                  <div id="startToggle" class="toggle-switch" onclick="toggleAndSubmit('start', false, 'startForm')">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+              </div>
+            </form>
+
+            <form id="stopForm" method="post">
+              <div class="box">
+                <label>Stop</label>
+                <input type="hidden" id="stopHidden" name='"DB_HMI".Spindle.Stop' value="0">
+                <div class="toggle-wrap">
+                  <div id="stopToggle" class="toggle-switch" onclick="toggleAndSubmit('stop', false, 'stopForm')">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+              </div>
+            </form>
           </div>
-        </div>
-      </div>
 
-      <button class="btn" type="submit">Zapsat nastavení vřetena</button>
-    </form>
+          <h3>Safety bits</h3>
+          <div class="grid">
+            <form id="safetyAuxForm" method="post">
+              <div class="box">
+                <label>SafetyRelayAuxOk</label>
+                <input type="hidden" id="safetyAuxHidden" name='"DB_IO".DI.SafetyRelayAuxOk' value="1">
+                <div class="toggle-wrap">
+                  <div id="safetyAuxToggle" class="toggle-switch safety-good" onclick="toggleAndSubmit('safetyAux', true, 'safetyAuxForm')">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+                <div class="muted" id="safetyAuxText">INACTIVE • active low • PLC=1</div>
+              </div>
+            </form>
 
-    <div class="sep"></div>
+            <form id="safetyFaultForm" method="post">
+              <div class="box">
+                <label>ExternalFault</label>
+                <input type="hidden" id="safetyFaultHidden" name='"DB_IO".DI.ExternalFault' value="0">
+                <div class="toggle-wrap">
+                  <div id="safetyFaultToggle" class="toggle-switch safety-bad" onclick="toggleAndSubmit('safetyFault', false, 'safetyFaultForm')">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+                <div class="muted" id="safetyFaultText">INACTIVE • active high • PLC=0</div>
+              </div>
+            </form>
+          </div>
 
-    <h2>Laboratorní zdroj</h2>
+          <div class="grid">
+            <form id="tempHighForm" method="post">
+              <div class="box">
+                <label>TempHigh</label>
+                <input type="hidden" id="tempHighHidden" name='"DB_Alarms".TempHigh' value="0">
+                <div class="toggle-wrap">
+                  <div id="tempHighToggle" class="toggle-switch safety-bad" onclick="toggleAndSubmit('tempHigh', false, 'tempHighForm')">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+                <div class="muted" id="tempHighText">INACTIVE • active high • PLC=0</div>
+              </div>
+            </form>
 
-    <!-- Povolení zápisu do PLC tagů pro LabPSU_Control -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".Enable' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".PermitOutput' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".Mode' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".Cycle_s' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".BaseVoltage_V' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".CurrentOffset_A' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".DebugAmplitude_A' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".DebugFrequency_Hz' -->
-    <!-- AWP_In_Variable Name='"LabPSU_Control".ConstCurrent_A' -->
+            <form id="vibCriticalForm" method="post">
+              <div class="box">
+                <label>VibCritical</label>
+                <input type="hidden" id="vibCriticalHidden" name='"DB_Alarms".VibCritical' value="0">
+                <div class="toggle-wrap">
+                  <div id="vibCriticalToggle" class="toggle-switch safety-bad" onclick="toggleAndSubmit('vibCritical', false, 'vibCriticalForm')">
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+                <div class="muted" id="vibCriticalText">INACTIVE • active high • PLC=0</div>
+              </div>
+            </form>
+          </div>
 
-    <form method="post">
-      <div class="grid3">
-        <div class="box">
-          <div class="field">
-            <label>Základní povely</label>
-
-            <input type="hidden" name='"LabPSU_Control".Enable' value="0">
-            <div class="checkrow">
-              <input type="checkbox" id="psuEnable" name='"LabPSU_Control".Enable' value="1">
-              <label for="psuEnable" style="margin:0;font-weight:normal;">Enable</label>
+          <form method="post" onsubmit="return prepareSpindleSubmit();">
+          <form method="post" onsubmit="return prepareSpindleSubmit();">
+            <h3>Nastavení otáček</h3>
+            <div class="grid">
+              <div class="box">
+                <div class="field">
+                  <label for="rpmInput">Požadované otáčky [rpm]</label>
+                  <input id="rpmInput" type="number" name='"DB_HMI".Spindle.Speed_RPM' min="0" max="18000" step="1" value=':="DB_HMI".Spindle.Speed_RPM:' oninput="syncSpindleFromNumber()">
+                  <input id="rpmSlider" type="range" min="0" max="18000" step="100" value="0" oninput="syncSpindleFromSlider()">
+                  <div class="big-value"><span id="rpmDisplay">0</span> rpm</div>
+                </div>
+              </div>
+              <div class="box">
+                <button class="btn" type="submit">Zapsat otáčky</button>
+              </div>
             </div>
+          </form>
+        </div>
+      </div>
 
-            <input type="hidden" name='"LabPSU_Control".PermitOutput' value="0">
-            <div class="checkrow">
-              <input type="checkbox" id="psuPermitOutput" name='"LabPSU_Control".PermitOutput' value="1">
-              <label for="psuPermitOutput" style="margin:0;font-weight:normal;">PermitOutput</label>
+      <div id="page-safety" class="page">
+        <div class="card">
+          <h2>Safety Gate Test</h2>
+          <div class="muted">Testovací stránka pro PLCSIM Advanced. Zápis do simulačních vstupů a alarmů, čtení statusů safety FB.</div>
+
+          <div class="sep"></div>
+
+          <h3>Aktuální stav Safety</h3>
+          <div class="grid">
+            <div class="box">
+              <div>SafetyOk: <b>:="DB_Status".Safety.SafetyOk:</b></div>
+              <div>PermitMotion: <b>:="DB_Status".Safety.PermitMotion:</b></div>
+              <div>TripActive: <b>:="DB_Status".Safety.TripActive:</b></div>
+            </div>
+            <div class="box">
+              <div>TripCode: <b>:="DB_Status".Safety.TripCode:</b></div>
+              <div>StatusText: <b>:="DB_Status".Safety.StatusText:</b></div>
             </div>
           </div>
 
-          <div class="field">
-            <label for="psuMode">Mode (USInt)</label>
-            <input
-              id="psuMode"
-              type="number"
-              name='"LabPSU_Control".Mode'
-              min="0"
-              max="255"
-              step="1"
-              value=':="LabPSU_Control".Mode:'>
-          </div>
+          <div class="sep"></div>
 
-          <div class="field">
-            <label for="psuCycle">Cycle_s</label>
-            <input
-              id="psuCycle"
-              type="number"
-              name='"LabPSU_Control".Cycle_s'
-              step="0.001"
-              value=':="LabPSU_Control".Cycle_s:'>
-          </div>
-        </div>
+          <!-- AWP_In_Variable Name='"DB_IO".DI.EmergencyStop' -->
+          <!-- AWP_In_Variable Name='"DB_IO".DI.SafetyRelayAuxOk' -->
+          <!-- AWP_In_Variable Name='"DB_IO".DI.ExternalFault' -->
+          <!-- AWP_In_Variable Name='"DB_Alarms".TempHigh' -->
+          <!-- AWP_In_Variable Name='"DB_Alarms".VibCritical' -->
 
-        <div class="box">
-          <div class="field">
-            <label for="psuBaseVoltage">BaseVoltage_V</label>
-            <input
-              id="psuBaseVoltage"
-              type="number"
-              name='"LabPSU_Control".BaseVoltage_V'
-              step="0.01"
-              value=':="LabPSU_Control".BaseVoltage_V:'>
-          </div>
+          <form method="post">
+            <h3>Simulované vstupy</h3>
+            <div class="grid">
+              <div class="box">
+                <input type="hidden" name='"DB_IO".DI.EmergencyStop' value="0">
+                <div class="checkrow">
+                  <input type="checkbox" id="EmergencyStop" name='"DB_IO".DI.EmergencyStop' value="1">
+                  <label for="EmergencyStop" style="margin:0;font-weight:normal;">EmergencyStop</label>
+                </div>
 
-          <div class="field">
-            <label for="psuCurrentOffset">CurrentOffset_A</label>
-            <input
-              id="psuCurrentOffset"
-              type="number"
-              name='"LabPSU_Control".CurrentOffset_A'
-              step="0.01"
-              value=':="LabPSU_Control".CurrentOffset_A:'>
-          </div>
+                <input type="hidden" name='"DB_IO".DI.SafetyRelayAuxOk' value="0">
+                <div class="checkrow">
+                  <input type="checkbox" id="SafetyRelayAuxOk" name='"DB_IO".DI.SafetyRelayAuxOk' value="1">
+                  <label for="SafetyRelayAuxOk" style="margin:0;font-weight:normal;">SafetyRelayAuxOk</label>
+                </div>
 
-          <div class="field">
-            <label for="psuDebugAmplitude">DebugAmplitude_A</label>
-            <input
-              id="psuDebugAmplitude"
-              type="number"
-              name='"LabPSU_Control".DebugAmplitude_A'
-              step="0.01"
-              value=':="LabPSU_Control".DebugAmplitude_A:'>
-          </div>
-        </div>
+                <input type="hidden" name='"DB_IO".DI.ExternalFault' value="0">
+                <div class="checkrow">
+                  <input type="checkbox" id="ExternalFaultSafety" name='"DB_IO".DI.ExternalFault' value="1">
+                  <label for="ExternalFaultSafety" style="margin:0;font-weight:normal;">ExternalFault</label>
+                </div>
+              </div>
 
-        <div class="box">
-          <div class="field">
-            <label for="psuDebugFrequency">DebugFrequency_Hz</label>
-            <input
-              id="psuDebugFrequency"
-              type="number"
-              name='"LabPSU_Control".DebugFrequency_Hz'
-              step="0.01"
-              value=':="LabPSU_Control".DebugFrequency_Hz:'>
-          </div>
+              <div class="box">
+                <input type="hidden" name='"DB_Alarms".TempHigh' value="0">
+                <div class="checkrow">
+                  <input type="checkbox" id="TempHigh" name='"DB_Alarms".TempHigh' value="1">
+                  <label for="TempHigh" style="margin:0;font-weight:normal;">TempAlarm / TempHigh</label>
+                </div>
 
-          <div class="field">
-            <label for="psuConstCurrent">ConstCurrent_A</label>
-            <input
-              id="psuConstCurrent"
-              type="number"
-              name='"LabPSU_Control".ConstCurrent_A'
-              step="0.01"
-              value=':="LabPSU_Control".ConstCurrent_A:'>
+                <input type="hidden" name='"DB_Alarms".VibCritical' value="0">
+                <div class="checkrow">
+                  <input type="checkbox" id="VibCritical" name='"DB_Alarms".VibCritical' value="1">
+                  <label for="VibCritical" style="margin:0;font-weight:normal;">VibAlarm / VibCritical</label>
+                </div>
+
+                <button class="btn" type="submit">Zapsat safety test signály</button>
+              </div>
+            </div>
+          </form>
+
+          <div class="sep"></div>
+
+          <div class="box">
+            <div>EmergencyStop: <b>:="DB_IO".DI.EmergencyStop:</b></div>
+            <div>SafetyRelayAuxOk: <b>:="DB_IO".DI.SafetyRelayAuxOk:</b></div>
+            <div>ExternalFault: <b>:="DB_IO".DI.ExternalFault:</b></div>
+            <div>TempHigh: <b>:="DB_Alarms".TempHigh:</b></div>
+            <div>VibCritical: <b>:="DB_Alarms".VibCritical:</b></div>
           </div>
         </div>
       </div>
 
-      <button class="btn" type="submit">Zapsat nastavení zdroje</button>
-    </form>
-
-    <div class="sep"></div>
-
-    <h2>Diagnostika laboratorního zdroje</h2>
-    <div class="grid3">
-      <div class="box">
-        <div>Enable: <b>:="LabPSU_Control".Enable:</b></div>
-        <div>PermitOutput: <b>:="LabPSU_Control".PermitOutput:</b></div>
-        <div>Mode: <b>:="LabPSU_Control".Mode:</b></div>
-        <div>Cycle_s: <b>:="LabPSU_Control".Cycle_s:</b></div>
+      <div id="page-psu" class="page">
+        <div class="card">
+          <h2>Zdroj</h2>
+          <div class="muted">Tato stránka je zatím prázdná a připravená pro budoucí testování laboratorního zdroje.</div>
+        </div>
       </div>
-
-      <div class="box">
-        <div>BaseVoltage_V: <b>:="LabPSU_Control".BaseVoltage_V:</b></div>
-        <div>CurrentOffset_A: <b>:="LabPSU_Control".CurrentOffset_A:</b></div>
-        <div>DebugAmplitude_A: <b>:="LabPSU_Control".DebugAmplitude_A:</b></div>
-      </div>
-
-      <div class="box">
-        <div>DebugFrequency_Hz: <b>:="LabPSU_Control".DebugFrequency_Hz:</b></div>
-        <div>ConstCurrent_A: <b>:="LabPSU_Control".ConstCurrent_A:</b></div>
-      </div>
-    </div>
-
-    <div class="sep"></div>
-
-    <div class="muted">
-      Soubor ulož jako UTF-8.
     </div>
   </div>
 
   <script>
+    function showPage(pageId, btn) {
+      var pages = document.getElementsByClassName('page');
+      for (var i = 0; i < pages.length; i++) {
+        pages[i].classList.remove('active');
+      }
+      document.getElementById(pageId).classList.add('active');
+
+      var buttons = document.getElementsByClassName('navbtn');
+      for (var j = 0; j < buttons.length; j++) {
+        buttons[j].classList.remove('active');
+      }
+      btn.classList.add('active');
+    }
+
+    function toggleSwitch(name) {
+      var toggleId = name + 'Toggle';
+      var hiddenId = name + 'Hidden';
+      var toggle = document.getElementById(toggleId);
+      var hidden = document.getElementById(hiddenId);
+      if (!toggle || !hidden) return false;
+
+      var isActive = toggle.classList.contains('active');
+      if (isActive) {
+        toggle.classList.remove('active');
+        hidden.value = '0';
+      } else {
+        toggle.classList.add('active');
+        hidden.value = '1';
+      }
+      return false;
+    }
+
+    function toggleSafetySwitch(name, activeLow) {
+      var toggle = document.getElementById(name + 'Toggle');
+      var hidden = document.getElementById(name + 'Hidden');
+      var text = document.getElementById(name + 'Text');
+      if (!toggle || !hidden || !text) return false;
+
+      var isActive = toggle.classList.contains('active');
+      if (isActive) {
+        toggle.classList.remove('active');
+        hidden.value = activeLow ? '1' : '0';
+        text.textContent = 'INACTIVE • ' + (activeLow ? 'active low' : 'active high') + ' • PLC=' + hidden.value;
+      } else {
+        toggle.classList.add('active');
+        hidden.value = activeLow ? '0' : '1';
+        text.textContent = 'ACTIVE • ' + (activeLow ? 'active low' : 'active high') + ' • PLC=' + hidden.value;
+      }
+      return false;
+    }
+
+    function toggleAndSubmit(name, activeLow, formId) {
+      if (name === 'start' || name === 'stop') {
+        toggleSwitch(name);
+      } else {
+        toggleSafetySwitch(name, activeLow);
+      }
+
+      var form = document.getElementById(formId);
+      if (form) {
+        form.submit();
+      }
+      return false;
+    }
+
     function clamp(value, min, max) {
       if (value < min) return min;
       if (value > max) return max;
       return value;
     }
 
-    function syncFromNumber() {
-      var rpmInput = document.getElementById("rpmInput");
-      var rpmSlider = document.getElementById("rpmSlider");
-      var rpmDisplay = document.getElementById("rpmDisplay");
+    function syncSpindleFromNumber() {
+      var rpmInput = document.getElementById('rpmInput');
+      var rpmSlider = document.getElementById('rpmSlider');
+      var rpmDisplay = document.getElementById('rpmDisplay');
 
       var rpm = parseFloat(rpmInput.value);
-      if (isNaN(rpm)) {
-        rpm = 0;
-      }
-
+      if (isNaN(rpm)) rpm = 0;
       rpm = clamp(rpm, 0, 18000);
+
       rpmInput.value = rpm;
       rpmSlider.value = rpm;
       rpmDisplay.textContent = Math.round(rpm);
     }
 
-    function syncFromSlider() {
-      var rpmInput = document.getElementById("rpmInput");
-      var rpmSlider = document.getElementById("rpmSlider");
-      var rpmDisplay = document.getElementById("rpmDisplay");
+    function syncSpindleFromSlider() {
+      var rpmInput = document.getElementById('rpmInput');
+      var rpmSlider = document.getElementById('rpmSlider');
+      var rpmDisplay = document.getElementById('rpmDisplay');
 
       var rpm = parseFloat(rpmSlider.value);
-      if (isNaN(rpm)) {
-        rpm = 0;
-      }
+      if (isNaN(rpm)) rpm = 0;
 
       rpmInput.value = rpm;
       rpmDisplay.textContent = Math.round(rpm);
     }
 
-    function prepareSubmit() {
-      syncFromNumber();
+    function prepareSpindleSubmit() {
+      syncSpindleFromNumber();
       return true;
     }
 
-    function updatePermitMotionBadge() {
-      var badge = document.getElementById("permitMotionBadge");
-      var value = badge.textContent.replace(/\s+/g, "");
+    function initSpindleRpm() {
+      var rpmInput = document.getElementById('rpmInput');
+      var rpmSlider = document.getElementById('rpmSlider');
+      var rpmDisplay = document.getElementById('rpmDisplay');
 
-      if (value === "1" || value.toLowerCase() === "true") {
-        badge.className = "status status-ok";
-      } else {
-        badge.className = "status status-bad";
-      }
-    }
+      if (!rpmInput) return;
 
-    function initCurrentRpm() {
-      var rawText = document.getElementById("rawSpeedValue").textContent;
-      var rpm = parseFloat(rawText);
+      var rpm = parseFloat(rpmInput.value);
+      if (isNaN(rpm)) rpm = 0;
+      rpm = clamp(rpm, 0, 18000);
 
-      if (!isNaN(rpm)) {
-        document.getElementById("rpmInput").value = rpm;
-        document.getElementById("rpmSlider").value = clamp(rpm, 0, 18000);
-        document.getElementById("rpmDisplay").textContent = Math.round(rpm);
-      } else {
-        syncFromNumber();
-      }
+      rpmInput.value = rpm;
+      rpmSlider.value = rpm;
+      rpmDisplay.textContent = Math.round(rpm);
     }
 
     window.onload = function() {
-      initCurrentRpm();
-      updatePermitMotionBadge();
+      initSpindleRpm();
     };
   </script>
 </body>

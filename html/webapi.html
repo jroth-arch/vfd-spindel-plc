@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <title>Web API test - Spindle Start</title>
+</head>
+<body>
+
+<h2>Web API test</h2>
+
+PLC adresa:
+<input id="ip" value="https://192.168.3.30"><br><br>
+
+Uživatel:
+<input id="user" value="json"><br><br>
+
+Heslo:
+<input id="pass" type="password" value="Qwertyuiop1"><br><br>
+
+<button onclick="login()">Login</button>
+<button onclick="read()">Read</button>
+<button onclick="write()">Write TRUE</button>
+
+<h3>Log:</h3>
+<pre id="log"></pre>
+
+<script>
+
+let token = "";
+
+function log(msg, obj) {
+  const l = document.getElementById("log");
+  l.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg + "\n" +
+                  (obj ? JSON.stringify(obj, null, 2) : "") + "\n\n" + l.textContent;
+}
+
+async function rpc(method, params, auth=false) {
+  const url = document.getElementById("ip").value + "/api/jsonrpc";
+
+  const body = [{
+    jsonrpc: "2.0",
+    method: method,
+    params: params,
+    id: Date.now()
+  }];
+
+  const headers = { "Content-Type": "application/json" };
+  if (auth && token) headers["X-Auth-Token"] = token;
+
+  log("REQUEST " + method, {url, body});
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify(body)
+    });
+  } catch (e) {
+    log("FETCH ERROR", e.toString());
+    throw e;
+  }
+
+  const text = await response.text();
+
+  log("HTTP RESPONSE", {
+    status: response.status,
+    text: text
+  });
+
+  const data = JSON.parse(text);
+
+  if (data[0].error) {
+    throw new Error(data[0].error.message);
+  }
+
+  return data[0].result;
+}
+
+async function login() {
+  try {
+    const user = document.getElementById("user").value;
+    const pass = document.getElementById("pass").value;
+
+    const res = await rpc("Api.Login", {user, password: pass});
+    token = res.token;
+
+    log("LOGIN OK", res);
+  } catch (e) {
+    log("LOGIN ERROR", e.toString());
+  }
+}
+
+async function read() {
+  try {
+    const res = await rpc("PlcProgram.Read", {
+      var: "\"DB_HMI\".Spindle.Start",
+      mode: "simple"
+    }, true);
+
+    log("READ OK", res);
+  } catch (e) {
+    log("READ ERROR", e.toString());
+  }
+}
+
+async function write() {
+  try {
+    const res = await rpc("PlcProgram.Write", {
+      var: "\"DB_HMI\".Spindle.Start",
+      value: true,
+      mode: "simple"
+    }, true);
+
+    log("WRITE OK", res);
+  } catch (e) {
+    log("WRITE ERROR", e.toString());
+  }
+}
+
+</script>
+
+</body>
+</html>

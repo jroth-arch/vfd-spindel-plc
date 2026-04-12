@@ -1,0 +1,51 @@
+┌──────────────────────────────┐
+│ PC / telefon                 │
+│ Webový prohlížeč             │
+│                              │
+│ 1) stáhne HTML/CSS/JS        │
+│ 2) spustí JavaScript         │
+│ 3) vykreslí UI               │
+└──────────────┬───────────────┘
+               │  HTTPS GET
+               ▼
+┌──────────────────────────────┐
+│ PLC Web server               │
+│                              │
+│ hostuje:                     │
+│ - index.html                 │
+│ - app.js                     │
+│ - styles.css                 │
+└──────────────┬───────────────┘
+               │  po kliknutí / timeru
+               │  HTTPS POST /api/jsonrpc
+               ▼
+┌──────────────────────────────┐
+│ PLC Web API                  │
+│                              │
+│ metody:                      │
+│ - Api.Login                  │
+│ - PlcProgram.Read            │
+│ - PlcProgram.Write           │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ PLC runtime / DB / tagy      │
+│                              │
+│ - DB_HMI                     │
+│ - DB_Status                  │
+│ - DB_IO                      │
+└──────────────────────────────┘
+
+Praktický tok po kliknutí na tlačítko Start 
+Uživatel klikne na "Start"
+        ↓
+JavaScript v browseru
+        ↓
+POST /api/jsonrpc  -> PlcProgram.Write("DB_HMI".Spindle.Start = true)
+        ↓
+PLC zapíše do DB
+        ↓
+PLC vrátí JSON odpověďs
+        ↓
+JavaScript změní text / barvu / stav tlačítka

@@ -87,18 +87,27 @@ V PLC jsou vytvořeny tagy, které přes DQ aktivují signály MI vstupů. Na ta
 ---
 
 ## TIA Project
+Otevreni projektu vfd...webapi.zap20
+user: admin
+Heslo: Admin@12345
 
 Rozpracovaný projekt na laptopu:
 - d:\spindle-vfd-control\tia\vfd-spindel-plc_v20\
 - TIA portal jsem pouzil d:\DS\V20_UPD1_WinCC\, ktery ma nainstalovany WinCC. TIA jsem stahl z \\ad001.siemens.net\dfs001\File\CZ\ADV D EU CZ PDS1 CSP\PLC\Comm PLS\TIA\V20_UPD1_WinCC.7z\
 
-### Kde pokračovat
-- Pripravit HMI panel
-  - Vymyslet strukturu obrazovek
-  - Zapsat a vycist hodnoty z PLC DB
-  - Rozchodit HMI panel 
+### Bezpečnostní signály
 
----
+Během provádění testů jsou monitorovány následující bezpečnostní signály:
+
+| Název signálu | Aktivní úroveň | Popis |
+|---------------|----------------|-------|
+| EmergencyStop | LOW (0) | Nouzové tlačítko je stisknuto |
+| SafetyRelayAuxOk | HIGH (1) | Pomocný kontakt bezpečnostního relé je v pořádku |
+| ExternalFault | HIGH (1) | Detekována externí porucha |
+| TempHigh | HIGH (1) | Překročena teplotní mez |
+| VibCritical | HIGH (1) | Detekována kritická úroveň vibrací |
+
+> **Poznámka:** Signály označené jako aktivní LOW (0) spouští bezpečnostní reakci, když je signál nepravdivý/nízký. Signály označené jako aktivní HIGH (1) spouští bezpečnostní reakci, když je signál pravdivý/vysoký.
 
 ## Appendix 1 – Sequence diagram (Mermaid)
 

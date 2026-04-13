@@ -278,7 +278,7 @@
             <div class="box">
               <label>EmergencyStop</label>
               <div class="toggle-wrap">
-                <div id="EmergencyStopToggle" class="toggle-switch safety-bad" onclick="toggleBit('\"DB_IO\".DI.EmergencyStop', 'EmergencyStopToggle')">
+                <div id="EmergencyStopToggle" class="toggle-switch safety-bad" onclick="toggleEmergencyStop()">
                   <div class="toggle-knob"></div>
                 </div>
               </div>
@@ -288,7 +288,7 @@
             <div class="box">
               <label>SafetyRelayAuxOk</label>
               <div class="toggle-wrap">
-                <div id="SafetyRelayAuxOkToggle" class="toggle-switch" onclick="toggleBit('\"DB_IO\".DI.SafetyRelayAuxOk', 'SafetyRelayAuxOkToggle')">
+                <div id="SafetyRelayAuxOkToggle" class="toggle-switch" onclick="toggleSafetyRelayAuxOk()">
                   <div class="toggle-knob"></div>
                 </div>
               </div>
@@ -298,7 +298,7 @@
             <div class="box">
               <label>ExternalFault</label>
               <div class="toggle-wrap">
-                <div id="ExternalFaultToggle" class="toggle-switch safety-bad" onclick="toggleBit('\"DB_IO\".DI.ExternalFault', 'ExternalFaultToggle')">
+                <div id="ExternalFaultToggle" class="toggle-switch safety-bad" onclick="toggleExternalFault()">
                   <div class="toggle-knob"></div>
                 </div>
               </div>
@@ -308,7 +308,7 @@
             <div class="box">
               <label>TempHigh</label>
               <div class="toggle-wrap">
-                <div id="TempHighToggle" class="toggle-switch safety-bad" onclick="toggleBit('\"DB_Alarms\".TempHigh', 'TempHighToggle')">
+                <div id="TempHighToggle" class="toggle-switch safety-bad" onclick="toggleTempHigh()">
                   <div class="toggle-knob"></div>
                 </div>
               </div>
@@ -318,7 +318,7 @@
             <div class="box">
               <label>VibCritical</label>
               <div class="toggle-wrap">
-                <div id="VibCriticalToggle" class="toggle-switch safety-bad" onclick="toggleBit('\"DB_Alarms\".VibCritical', 'VibCriticalToggle')">
+                <div id="VibCriticalToggle" class="toggle-switch safety-bad" onclick="toggleVibCritical()">
                   <div class="toggle-knob"></div>
                 </div>
               </div>
@@ -345,195 +345,394 @@
   </div>
 
   <script>
-    let authToken = null;
-    let pollTimer = null;
+  let authToken = null;
+  let pollTimer = null;
+  let keepAliveTimer = null;
+  let refreshInProgress = false;
+  let writeInProgress = false;
 
-    const TAGS = {
-      safetyOk: '"DB_Status".Safety.SafetyOk',
-      permitMotion: '"DB_Status".Safety.PermitMotion',
-      tripActive: '"DB_Status".Safety.TripActive',
-      tripCode: '"DB_Status".Safety.TripCode',
-      statusText: '"DB_Status".Safety.StatusText',
-      emergencyStop: '"DB_IO".DI.EmergencyStop',
-      safetyRelayAuxOk: '"DB_IO".DI.SafetyRelayAuxOk',
-      externalFault: '"DB_IO".DI.ExternalFault',
-      tempHigh: '"DB_Alarms".TempHigh',
-      vibCritical: '"DB_Alarms".VibCritical'
+  const TAGS = {
+    safetyOk: '"DB_Status".Safety.SafetyOk',
+    permitMotion: '"DB_Status".Safety.PermitMotion',
+    tripActive: '"DB_Status".Safety.TripActive',
+    tripCode: '"DB_Status".Safety.TripCode',
+    statusText: '"DB_Status".Safety.StatusText',
+    emergencyStop: '"DB_IO".DI.EmergencyStop',
+    safetyRelayAuxOk: '"DB_IO".DI.SafetyRelayAuxOk',
+    externalFault: '"DB_IO".DI.ExternalFault',
+    tempHigh: '"DB_Alarms".TempHigh',
+    vibCritical: '"DB_Alarms".VibCritical'
+  };
+
+  function showPage(pageId, btn) {
+    const pages = document.getElementsByClassName('page');
+    for (let i = 0; i < pages.length; i++) {
+      pages[i].classList.remove('active');
+    }
+    document.getElementById(pageId).classList.add('active');
+
+    const buttons = document.getElementsByClassName('navbtn');
+    for (let i = 0; i < buttons.length; i++) {
+      buttons[i].classList.remove('active');
+    }
+    btn.classList.add('active');
+  }
+
+  function setConnStatus(text, ok) {
+    const el = document.getElementById('connStatus');
+    el.textContent = text;
+    el.className = ok ? 'status-pill status-ok' : 'status-pill status-bad';
+  }
+
+  function setDebug(text) {
+    console.log(text);
+    const el = document.getElementById('debugText');
+    if (el) {
+      el.textContent = text;
+    }
+  }
+
+  async function rpc(method, params = null, needAuth = true) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (needAuth && authToken) {
+      headers['X-Auth-Token'] = authToken;
+    }
+
+    const req = {
+      jsonrpc: '2.0',
+      method: method,
+      id: 1
     };
 
-    function showPage(pageId, btn) {
-      const pages = document.getElementsByClassName('page');
-      for (let i = 0; i < pages.length; i++) pages[i].classList.remove('active');
-      document.getElementById(pageId).classList.add('active');
-
-      const buttons = document.getElementsByClassName('navbtn');
-      for (let i = 0; i < buttons.length; i++) buttons[i].classList.remove('active');
-      btn.classList.add('active');
+    if (params !== null) {
+      req.params = params;
     }
 
-    function setConnStatus(text, ok) {
-      const el = document.getElementById('connStatus');
-      el.textContent = text;
-      el.className = ok ? 'status-pill status-ok' : 'status-pill status-bad';
+    const resp = await fetch('/api/jsonrpc', {
+      method: 'POST',
+      headers,
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      body: JSON.stringify([req])
+    });
+
+    if (!resp.ok) {
+      throw new Error('HTTP ' + resp.status);
     }
 
-    async function rpc(method, params = null, needAuth = true) {
-      const headers = { 'Content-Type': 'application/json' };
-      if (needAuth && authToken) headers['X-Auth-Token'] = authToken;
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error('Prázdná odpověď API');
+    }
 
+    const item = data[0];
+    if (item.error) {
+      throw new Error(item.error.message + ' (code ' + item.error.code + ')');
+    }
+
+    return item.result;
+  }
+
+  async function rpcBatch(calls, needAuth = true) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (needAuth && authToken) {
+      headers['X-Auth-Token'] = authToken;
+    }
+
+    const payload = calls.map((call, idx) => {
       const req = {
         jsonrpc: '2.0',
-        method: method,
-        id: 1
+        method: call.method,
+        id: idx + 1
       };
-      if (params !== null) req.params = params;
-
-      const resp = await fetch('/api/jsonrpc', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify([req])
-      });
-
-      if (!resp.ok) {
-        throw new Error('HTTP ' + resp.status);
+      if (call.params !== undefined && call.params !== null) {
+        req.params = call.params;
       }
+      return req;
+    });
 
-      const data = await resp.json();
-      const item = data[0];
+    const resp = await fetch('/api/jsonrpc', {
+      method: 'POST',
+      headers,
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) {
+      throw new Error('HTTP ' + resp.status);
+    }
+
+    const data = await resp.json();
+    if (!Array.isArray(data)) {
+      throw new Error('Neplatná batch odpověď');
+    }
+
+    const byId = new Map();
+    for (const item of data) {
+      byId.set(item.id, item);
+    }
+
+    return calls.map((_, idx) => {
+      const item = byId.get(idx + 1);
+      if (!item) {
+        throw new Error('Chybí batch položka ' + (idx + 1));
+      }
       if (item.error) {
         throw new Error(item.error.message + ' (code ' + item.error.code + ')');
       }
       return item.result;
-    }
+    });
+  }
 
-    async function login() {
-      const user = document.getElementById('apiUser').value.trim();
-      const password = document.getElementById('apiPassword').value;
+  async function login() {
+    const user = document.getElementById('apiUser').value.trim();
+    const password = document.getElementById('apiPassword').value;
 
-      try {
-        const result = await rpc('Api.Login', { user, password }, false);
-        authToken = result.token;
-        setConnStatus('Přihlášeno', true);
-        startPolling();
-      } catch (err) {
-        setConnStatus('Login failed', false);
-        alert('Login selhal: ' + err.message);
-      }
-    }
-
-    async function logout() {
+    try {
+      const result = await rpc('Api.Login', { user, password }, false);
+      authToken = result.token;
+      setConnStatus('Přihlášeno', true);
+      setDebug('Login OK');
+      startPolling();
+      startKeepAlive();
+      await refreshAll();
+    } catch (err) {
+      authToken = null;
       stopPolling();
-      if (!authToken) {
-        setConnStatus('Nepřihlášeno', false);
-        return;
-      }
-      try {
-        await rpc('Api.Logout');
-      } catch (err) {
-        // nech jen tiše projít
-      } finally {
-        authToken = null;
-        setConnStatus('Nepřihlášeno', false);
-      }
+      stopKeepAlive();
+      setConnStatus('Login failed', false);
+      setDebug('Login error: ' + err.message);
+      alert('Login selhal: ' + err.message);
+    }
+  }
+
+  async function logout() {
+    stopPolling();
+    stopKeepAlive();
+
+    if (!authToken) {
+      setConnStatus('Nepřihlášeno', false);
+      setDebug('Logout bez aktivní session');
+      return;
     }
 
-    async function readTag(tag) {
-      return await rpc('PlcProgram.Read', { var: tag, mode: 'simple' });
+    try {
+      await rpc('Api.Logout');
+    } catch (err) {
+      // ignorovat
+    } finally {
+      authToken = null;
+      setConnStatus('Nepřihlášeno', false);
+      setDebug('Odhlášeno');
     }
+  }
 
-    async function writeTag(tag, value) {
-      return await rpc('PlcProgram.Write', { var: tag, value: value });
+  async function keepAlive() {
+    if (!authToken) return;
+    try {
+      await rpc('Api.Ping', null, true);
+      setConnStatus('Přihlášeno', true);
+    } catch (err) {
+      stopPolling();
+      stopKeepAlive();
+      authToken = null;
+      setConnStatus('Session vypršela', false);
+      setDebug('KeepAlive error: ' + err.message);
     }
+  }
 
-    function setToggle(toggleId, textId, value) {
-      const toggle = document.getElementById(toggleId);
-      const text = document.getElementById(textId);
-      const active = !!value;
+  function startKeepAlive() {
+    stopKeepAlive();
+    keepAliveTimer = setInterval(keepAlive, 30000);
+  }
 
+  function stopKeepAlive() {
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+      keepAliveTimer = null;
+    }
+  }
+
+  function setStandardToggle(toggleId, textId, value) {
+    const toggle = document.getElementById(toggleId);
+    const text = document.getElementById(textId);
+    const active = !!value;
+
+    if (toggle) {
       toggle.classList.toggle('active', active);
+    }
+    if (text) {
       text.textContent = active ? 'ACTIVE • PLC=true' : 'INACTIVE • PLC=false';
     }
+  }
 
-    async function toggleBit(tag, toggleId) {
-      if (!authToken) {
-        alert('Nejdřív se přihlas.');
-        return;
-      }
+  function setSafetyRelayAuxToggle(value) {
+    const toggle = document.getElementById('SafetyRelayAuxOkToggle');
+    const text = document.getElementById('SafetyRelayAuxOkText');
 
-      try {
-        const current = await readTag(tag);
-        const next = !current;
-        await writeTag(tag, next);
+    const plcValue = !!value;
+    const healthy = plcValue === true;   // true = OK
+    const fault = plcValue === false;    // false = safety fault / active low
 
-        const textId = toggleId.replace('Toggle', 'Text');
-        setToggle(toggleId, textId, next);
-
-        // okamžitý refresh safety statusů
-        await refreshAll();
-      } catch (err) {
-        alert('Zápis selhal: ' + err.message);
+    if (toggle) {
+      toggle.classList.remove('active', 'safety-bad');
+      if (healthy) {
+        toggle.classList.add('active');       // zelený
+      } else {
+        toggle.classList.add('active', 'safety-bad'); // červený
       }
     }
 
-    async function refreshAll() {
-      if (!authToken) return;
+    if (text) {
+      text.textContent = healthy
+        ? 'OK • active low • PLC=true'
+        : 'ACTIVE FAULT • active low • PLC=false';
+    }
+  }
 
-      try {
-        const [
-          safetyOk,
-          permitMotion,
-          tripActive,
-          tripCode,
-          statusText,
-          emergencyStop,
-          safetyRelayAuxOk,
-          externalFault,
-          tempHigh,
-          vibCritical
-        ] = await Promise.all([
-          readTag(TAGS.safetyOk),
-          readTag(TAGS.permitMotion),
-          readTag(TAGS.tripActive),
-          readTag(TAGS.tripCode),
-          readTag(TAGS.statusText),
-          readTag(TAGS.emergencyStop),
-          readTag(TAGS.safetyRelayAuxOk),
-          readTag(TAGS.externalFault),
-          readTag(TAGS.tempHigh),
-          readTag(TAGS.vibCritical)
-        ]);
-
-        document.getElementById('valSafetyOk').textContent = String(safetyOk);
-        document.getElementById('valPermitMotion').textContent = String(permitMotion);
-        document.getElementById('valTripActive').textContent = String(tripActive);
-        document.getElementById('valTripCode').textContent = String(tripCode);
-        document.getElementById('valStatusText').textContent = String(statusText);
-        document.getElementById('valLastRefresh').textContent = new Date().toLocaleTimeString();
-
-        setToggle('EmergencyStopToggle', 'EmergencyStopText', emergencyStop);
-        setToggle('SafetyRelayAuxOkToggle', 'SafetyRelayAuxOkText', safetyRelayAuxOk);
-        setToggle('ExternalFaultToggle', 'ExternalFaultText', externalFault);
-        setToggle('TempHighToggle', 'TempHighText', tempHigh);
-        setToggle('VibCriticalToggle', 'VibCriticalText', vibCritical);
-      } catch (err) {
-        setConnStatus('Chyba čtení z PLC', false);
-        stopPolling();
-        console.error(err);
-      }
+  async function refreshAll() {
+    if (!authToken || refreshInProgress || writeInProgress) {
+      return;
     }
 
-    function startPolling() {
+    refreshInProgress = true;
+
+    try {
+      const results = await rpcBatch([
+        { method: 'PlcProgram.Read', params: { var: TAGS.safetyOk, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.permitMotion, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.tripActive, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.tripCode, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.statusText, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.emergencyStop, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.safetyRelayAuxOk, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.externalFault, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.tempHigh, mode: 'simple' } },
+        { method: 'PlcProgram.Read', params: { var: TAGS.vibCritical, mode: 'simple' } }
+      ]);
+
+      const [
+        safetyOk,
+        permitMotion,
+        tripActive,
+        tripCode,
+        statusText,
+        emergencyStop,
+        safetyRelayAuxOk,
+        externalFault,
+        tempHigh,
+        vibCritical
+      ] = results;
+
+      document.getElementById('valSafetyOk').textContent = String(safetyOk);
+      document.getElementById('valPermitMotion').textContent = String(permitMotion);
+      document.getElementById('valTripActive').textContent = String(tripActive);
+      document.getElementById('valTripCode').textContent = String(tripCode);
+      document.getElementById('valStatusText').textContent = String(statusText);
+      document.getElementById('valLastRefresh').textContent = new Date().toLocaleTimeString();
+
+      setStandardToggle('EmergencyStopToggle', 'EmergencyStopText', emergencyStop);
+      setSafetyRelayAuxToggle(safetyRelayAuxOk);
+      setStandardToggle('ExternalFaultToggle', 'ExternalFaultText', externalFault);
+      setStandardToggle('TempHighToggle', 'TempHighText', tempHigh);
+      setStandardToggle('VibCriticalToggle', 'VibCriticalText', vibCritical);
+
+      setConnStatus('Přihlášeno', true);
+    } catch (err) {
       stopPolling();
-      refreshAll();
-      pollTimer = setInterval(refreshAll, 1000);
+      stopKeepAlive();
+      authToken = null;
+      setConnStatus('Chyba čtení z PLC', false);
+      setDebug('Refresh error: ' + err.message);
+    } finally {
+      refreshInProgress = false;
+    }
+  }
+
+  async function readBit(tag) {
+    return await rpc('PlcProgram.Read', { var: tag, mode: 'simple' }, true);
+  }
+
+  async function writeBit(tag, value) {
+    return await rpc('PlcProgram.Write', { var: tag, value: value, mode: 'simple' }, true);
+  }
+
+  function toggleEmergencyStop() {
+  toggleBit(TAGS.emergencyStop, 'EmergencyStopToggle');
+  }
+
+  function toggleSafetyRelayAuxOk() {
+    toggleBit(TAGS.safetyRelayAuxOk, 'SafetyRelayAuxOkToggle');
+  }
+
+  function toggleExternalFault() {
+    toggleBit(TAGS.externalFault, 'ExternalFaultToggle');
+  }
+
+  function toggleTempHigh() {
+    toggleBit(TAGS.tempHigh, 'TempHighToggle');
+  }
+
+  function toggleVibCritical() {
+    toggleBit(TAGS.vibCritical, 'VibCriticalToggle');
+  }
+
+  async function toggleBit(tag, toggleId) {
+  setDebug('CLICK: ' + tag + ' toggleId=' + toggleId + ' authToken=' + (authToken ? 'yes' : 'no') + ' writeInProgress=' + writeInProgress);
+
+  if (!authToken) {
+    alert('Nejdřív se přihlas.');
+    return;
+  }
+
+  if (writeInProgress) {
+    setDebug('CLICK ignored: writeInProgress=true');
+    return;
+  }
+
+  writeInProgress = true;
+
+  try {
+    const current = await readBit(tag);
+    setDebug('READ current: ' + tag + ' = ' + current);
+
+    const next = !current;
+    setDebug('WRITE start: ' + tag + ' current=' + current + ' next=' + next);
+
+    const writeResult = await writeBit(tag, next);
+    setDebug('WRITE result: ' + tag + ' -> ' + next + ' result=' + JSON.stringify(writeResult));
+
+    if (tag === TAGS.safetyRelayAuxOk) {
+      setSafetyRelayAuxToggle(next);
+    } else {
+      const textId = toggleId.replace('Toggle', 'Text');
+      setStandardToggle(toggleId, textId, next);
     }
 
-    function stopPolling() {
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
+    writeInProgress = false;
+    await refreshAll();
+  } catch (err) {
+    writeInProgress = false;
+    setDebug('WRITE error: ' + tag + ' -> ' + err.message);
+    alert('Zápis selhal: ' + err.message);
+  }
+}
+
+  function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(refreshAll, 500);
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
     }
-  </script>
+  }
+
+  window.addEventListener('beforeunload', function() {
+    stopPolling();
+    stopKeepAlive();
+  });
+</script>
 </body>
 </html>

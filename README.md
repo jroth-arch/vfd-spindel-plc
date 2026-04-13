@@ -91,6 +91,33 @@ Otevreni projektu vfd...webapi.zap20
 user: admin
 Heslo: Admin@12345
 
+**TODO** Upravit strukturu slozek tak, ze bubu mit 
+project/
+├── plc/
+│   └── TIA projekt (volitelné)
+├── webapp/
+│   ├── index.html
+│   ├── app.js
+│   ├── style.css
+│   └── ...
+├── deploy/
+│   ├── cli_deploy_tool.py
+│   └── config.json
+
+a config.json bude obsahovat udaje pro rychle spusteni / nasazeni stranek na plc. Pripadne jejich aktualizaci
+
+{
+  "plc": {
+    "host": "192.168.3.30",
+    "user": "json",
+    "password": "Qwertyuiop1"
+  },
+  "webapp": {
+    "name": "myapp",
+    "default_page": "index.html"
+  }
+}
+
 Rozpracovaný projekt na laptopu:
 - d:\spindle-vfd-control\tia\vfd-spindel-plc_v20\
 - TIA portal jsem pouzil d:\DS\V20_UPD1_WinCC\, ktery ma nainstalovany WinCC. TIA jsem stahl z \\ad001.siemens.net\dfs001\File\CZ\ADV D EU CZ PDS1 CSP\PLC\Comm PLS\TIA\V20_UPD1_WinCC.7z\

@@ -11,6 +11,8 @@ Funkce:
 - aktivace appky
 - ověření výsledku přes Browse / BrowseResources
 
+python .\cli_deploy_tool.py --host 192.168.3.30 --user json --password Qwertyuiop1 --app myapp --file ./index.html --insecure
+
 Použití:
     python plc_webapp_deploy.py \
         --host 192.168.3.30 \

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vfd-Spindle-PLC</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+    <div class="sidebar">
+      <h1>Vfd-Spindle-PLC</h1>
+      <div class="sub">Web Application přes Web API</div>
+      <button class="navbtn active" onclick="showPage('page-safety', this)">Safety Gate Test</button>
+      <button class="navbtn" onclick="showPage('page-spindle', this)">Vřeteno</button>
+      <button class="navbtn" onclick="showPage('page-psu', this)">Zdroj</button>
+    </div>
+
+    <div class="content">
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Připojení</h2>
+        <div class="muted">Nejdřív se přihlas do Web API. Potom stránka začne periodicky číst a zapisovat hodnoty z PLC.</div>
+        <div class="sep"></div>
+
+        <div class="login-row">
+          <div class="field">
+            <label for="apiUser">Uživatel</label>
+            <input id="apiUser" type="text" value="json">
+          </div>
+          <div class="field">
+            <label for="apiPassword">Heslo</label>
+            <input id="apiPassword" type="password" value="">
+          </div>
+          <div class="field">
+            <button class="btn" type="button" onclick="login()">Login</button>
+            <button class="btn secondary" type="button" onclick="logout()">Logout</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span id="connStatus" class="status-pill">Nepřihlášeno</span>
+        </div>
+      </div>
+
+      <div id="page-safety" class="page active">
+        <div class="card">
+          <h2>Safety Gate Test</h2>
+          <div class="muted">Když se v PLC změní například <b>TempHigh</b>, stránka to automaticky překreslí. Zároveň lze safety test bity zapisovat i z webu.</div>
+
+          <div class="sep"></div>
+
+          <h3>Aktuální stav Safety</h3>
+          <div class="grid">
+            <div class="box kv">
+              <div>SafetyOk</div><div id="valSafetyOk" class="value-box">-</div>
+              <div>PermitMotion</div><div id="valPermitMotion" class="value-box">-</div>
+              <div>TripActive</div><div id="valTripActive" class="value-box">-</div>
+            </div>
+            <div class="box kv">
+              <div>TripCode</div><div id="valTripCode" class="value-box">-</div>
+              <div>StatusText</div><div id="valStatusText" class="value-box">-</div>
+              <div>Poslední refresh</div><div id="valLastRefresh" class="value-box">-</div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <h3>Simulované vstupy</h3>
+          <div class="grid">
+            <div class="box">
+              <label>EmergencyStop</label>
+              <div class="toggle-wrap">
+                <div id="EmergencyStopToggle" class="toggle-switch safety-bad" onclick="toggleEmergencyStop()">
+                  <div class="toggle-knob"></div>
+                </div>
+              </div>
+              <div class="muted" id="EmergencyStopText">-</div>
+            </div>
+
+            <div class="box">
+              <label>SafetyRelayAuxOk</label>
+              <div class="toggle-wrap">
+                <div id="SafetyRelayAuxOkToggle" class="toggle-switch" onclick="toggleSafetyRelayAuxOk()">
+                  <div class="toggle-knob"></div>
+                </div>
+              </div>
+              <div class="muted" id="SafetyRelayAuxOkText">-</div>
+            </div>
+
+            <div class="box">
+              <label>ExternalFault</label>
+              <div class="toggle-wrap">
+                <div id="ExternalFaultToggle" class="toggle-switch safety-bad" onclick="toggleExternalFault()">
+                  <div class="toggle-knob"></div>
+                </div>
+              </div>
+              <div class="muted" id="ExternalFaultText">-</div>
+            </div>
+
+            <div class="box">
+              <label>TempHigh</label>
+              <div class="toggle-wrap">
+                <div id="TempHighToggle" class="toggle-switch safety-bad" onclick="toggleTempHigh()">
+                  <div class="toggle-knob"></div>
+                </div>
+              </div>
+              <div class="muted" id="TempHighText">-</div>
+            </div>
+
+            <div class="box">
+              <label>VibCritical</label>
+              <div class="toggle-wrap">
+                <div id="VibCriticalToggle" class="toggle-switch safety-bad" onclick="toggleVibCritical()">
+                  <div class="toggle-knob"></div>
+                </div>
+              </div>
+              <div class="muted" id="VibCriticalText">-</div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+          <div class="box">
+            <div><b>Debug zápisu</b></div>
+            <div id="debugText" class="muted">Zatím bez zprávy.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-spindle" class="page">
+        <div class="card">
+          <h2>Vřeteno</h2>
+          <div class="muted">Ovládání spindle HMI tagů přes Web API.</div>
+
+          <div class="sep"></div>
+
+          <h3>Povely</h3>
+          <div class="grid">
+            <div class="box">
+              <label>Start</label>
+              <button id="spindleStartBtn" class="cmd-btn" type="button" onclick="spindleStartCommand()">Start</button>
+              <div class="muted" id="spindleStartText">"DB_HMI".Spindle.Start</div>
+            </div>
+
+            <div class="box">
+              <label>Stop</label>
+              <button id="spindleStopBtn" class="cmd-btn" type="button" onclick="spindleStopCommand()">Stop</button>
+              <div class="muted" id="spindleStopText">"DB_HMI".Spindle.Stop</div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <h3>Aktuální HMI povely</h3>
+          <div class="grid">
+            <div class="box">
+              <div>Start bit: <b id="spindleStartValue">-</b></div>
+              <div>Stop bit: <b id="spindleStopValue">-</b></div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <h3>Otáčky</h3>
+          <div class="grid">
+            <div class="box">
+              <div class="field">
+                <label for="rpmInput">Požadované otáčky [rpm]</label>
+                <input id="rpmInput" type="number" min="0" max="18000" step="1" value="0" oninput="syncSpindleFromNumber()">
+                <input id="rpmSlider" type="range" min="0" max="18000" step="100" value="0" oninput="syncSpindleFromSlider()">
+                <div class="big-value"><span id="rpmDisplay">0</span> rpm</div>
+              </div>
+            </div>
+
+            <div class="box">
+              <label>Zápis</label>
+              <button class="btn" type="button" onclick="writeSpindleSpeed()">Zapsat otáčky</button>
+              <div class="muted" id="spindleSpeedText">Zápis do "DB_HMI".Spindle.Speed_RPM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-psu" class="page">
+        <div class="card">
+          <h2>Zdroj</h2>
+          <div class="muted">Připraveno pro další rozšíření.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

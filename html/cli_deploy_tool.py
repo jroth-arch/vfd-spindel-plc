@@ -5,21 +5,30 @@ Mini CI / deploy tool pro Siemens S7-1500 WebApp API.
 Funkce:
 - login
 - vytvoření appky, pokud neexistuje
-- smazání existující resource se stejným jménem (volitelně)
-- upload index.html přes ticket endpoint
+- upload jednoho souboru nebo celé složky
 - nastavení default page
 - aktivace appky
 - ověření výsledku přes Browse / BrowseResources
 
-python .\cli_deploy_tool.py --host 192.168.3.30 --user json --password Qwertyuiop1 --app myapp --file ./index.html --insecure
+Příklady:
 
-Použití:
-    python plc_webapp_deploy.py \
-        --host 192.168.3.30 \
-        --user json \
-        --password Qwertyuiop1 \
-        --app myapp \
-        --file ./index.html
+Single file:
+    python .\cli_deploy_tool.py ^
+      --host 192.168.3.30 ^
+      --user json ^
+      --password Qwertyuiop1 ^
+      --app myapp ^
+      --file .\index.html ^
+      --insecure
+
+Celá složka:
+    python .\cli_deploy_tool.py ^
+      --host 192.168.3.30 ^
+      --user json ^
+      --password Qwertyuiop1 ^
+      --app myapp ^
+      --dir .\webapp ^
+      --insecure
 
 Poznámka:
 - PLC musí mít zapnutý Web server a uživatel musí mít právo manage_user_pages.
@@ -334,6 +343,42 @@ def guess_media_type(path: Path) -> str:
     return guessed or "application/octet-stream"
 
 
+def upload_one_resource(
+    client: SiemensWebApiClient,
+    *,
+    app_name: str,
+    local_file: Path,
+    resource_name: str,
+    media_type: Optional[str],
+    delete_existing_resource: bool,
+) -> None:
+    if not local_file.is_file():
+        raise PlcApiError(f"Soubor neexistuje: {local_file}")
+
+    raw = local_file.read_bytes()
+    actual_media_type = media_type or guess_media_type(local_file)
+
+    if delete_existing_resource:
+        deleted = client.delete_resource_if_exists(app_name, resource_name)
+        print(f"      resource {resource_name}: {'smazána' if deleted else 'nebyla nalezena'}")
+
+    ticket_id = client.create_resource_ticket(
+        app_name=app_name,
+        resource_name=resource_name,
+        media_type=actual_media_type,
+        visibility="public",
+    )
+
+    try:
+        print(f"      upload {resource_name} ({len(raw)} B, media_type={actual_media_type})")
+        client.upload_ticket_content(ticket_id, raw)
+    finally:
+        try:
+            client.close_ticket(ticket_id)
+        except Exception as e:
+            print(f"      varování: nepodařilo se zavřít ticket pro {resource_name}: {e}", file=sys.stderr)
+
+
 def deploy_single_file(
     client: SiemensWebApiClient,
     *,
@@ -345,12 +390,6 @@ def deploy_single_file(
     enable_app: bool,
     delete_existing_resource: bool,
 ) -> None:
-    if not local_file.is_file():
-        raise PlcApiError(f"Soubor neexistuje: {local_file}")
-
-    raw = local_file.read_bytes()
-    actual_media_type = media_type or guess_media_type(local_file)
-
     print(f"[1/7] Login na PLC {client.host}")
     client.login()
 
@@ -362,34 +401,22 @@ def deploy_single_file(
         print(f"[3/7] Dočasné vypnutí appky '{app_name}' během deploye")
         client.set_state(app_name, "disabled")
 
-        if delete_existing_resource:
-            print(f"[4/7] Mazání původní resource '{resource_name}', pokud existuje")
-            deleted = client.delete_resource_if_exists(app_name, resource_name)
-            print("      smazána" if deleted else "      nebyla nalezena")
-
-        print(f"[5/7] Vytvoření resource '{resource_name}' a získání ticketu")
-        ticket_id = client.create_resource_ticket(
+        print(f"[4/7] Upload resource '{resource_name}'")
+        upload_one_resource(
+            client,
             app_name=app_name,
+            local_file=local_file,
             resource_name=resource_name,
-            media_type=actual_media_type,
-            visibility="public",
+            media_type=media_type,
+            delete_existing_resource=delete_existing_resource,
         )
 
-        try:
-            print(f"[6/7] Upload obsahu ({len(raw)} B, media_type={actual_media_type})")
-            client.upload_ticket_content(ticket_id, raw)
-        finally:
-            try:
-                client.close_ticket(ticket_id)
-            except Exception as e:
-                print(f"      varování: nepodařilo se zavřít ticket: {e}", file=sys.stderr)
-
         if set_default:
-            print(f"[7/7] Nastavení default page na '{resource_name}'")
+            print(f"[5/7] Nastavení default page na '{resource_name}'")
             client.set_default_page(app_name, resource_name)
 
         if enable_app:
-            print(f"[8/7] Aktivace appky '{app_name}'")
+            print(f"[6/7] Aktivace appky '{app_name}'")
             client.set_state(app_name, "enabled")
 
         app = client.browse_app(app_name)
@@ -407,6 +434,73 @@ def deploy_single_file(
         client.logout()
 
 
+def deploy_directory(
+    client: SiemensWebApiClient,
+    *,
+    app_name: str,
+    local_dir: Path,
+    set_default: bool,
+    enable_app: bool,
+    delete_existing_resource: bool,
+    default_page: str,
+) -> None:
+    if not local_dir.is_dir():
+        raise PlcApiError(f"Složka neexistuje: {local_dir}")
+
+    files = sorted([p for p in local_dir.iterdir() if p.is_file()])
+    if not files:
+        raise PlcApiError(f"Ve složce nejsou žádné soubory: {local_dir}")
+
+    print(f"[1/7] Login na PLC {client.host}")
+    client.login()
+
+    try:
+        print(f"[2/7] Kontrola / vytvoření appky '{app_name}'")
+        created = client.create_app_if_missing(app_name)
+        print("      vytvořena" if created else "      už existuje")
+
+        print(f"[3/7] Dočasné vypnutí appky '{app_name}' během deploye")
+        client.set_state(app_name, "disabled")
+
+        print(f"[4/7] Upload souborů ze složky '{local_dir}'")
+        for file_path in files:
+            upload_one_resource(
+                client,
+                app_name=app_name,
+                local_file=file_path,
+                resource_name=file_path.name,
+                media_type=None,
+                delete_existing_resource=delete_existing_resource,
+            )
+
+        if set_default:
+            print(f"[5/7] Nastavení default page na '{default_page}'")
+            client.set_default_page(app_name, default_page)
+
+        if enable_app:
+            print(f"[6/7] Aktivace appky '{app_name}'")
+            client.set_state(app_name, "enabled")
+
+        app = client.browse_app(app_name)
+
+        print("\nDeploy hotov.")
+        print(f"App state     : {app.get('state') if app else 'unknown'}")
+        print(f"Default page  : {app.get('default_page') if app else 'unknown'}")
+        print("Resources     :")
+        for file_path in files:
+            res = client.browse_resource(app_name, file_path.name)
+            print(
+                f"  - {file_path.name}: "
+                f"{res.get('size') if res else 'missing'} B, "
+                f"{res.get('media_type') if res else 'unknown'}"
+            )
+
+        print(f"URL           : https://{client.host}/~{app_name}")
+
+    finally:
+        client.logout()
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Deploy statické web appky na Siemens S7-1500 přes WebApp API."
@@ -415,9 +509,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--user", required=True, help="Web API uživatel")
     p.add_argument("--password", required=True, help="Web API heslo")
     p.add_argument("--app", required=True, help="Jméno web application")
-    p.add_argument("--file", required=True, type=Path, help="Lokální soubor k uploadu, např. index.html")
-    p.add_argument("--resource-name", default=None, help="Jméno resource v PLC, default = název souboru")
-    p.add_argument("--media-type", default=None, help="Např. text/html")
+
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--file", type=Path, help="Lokální soubor k uploadu, např. index.html")
+    group.add_argument("--dir", type=Path, help="Lokální složka s více soubory, např. ./webapp")
+
+    p.add_argument("--resource-name", default=None, help="Jméno resource v PLC, default = název souboru; jen pro --file")
+    p.add_argument("--media-type", default=None, help="Např. text/html; jen pro --file")
+    p.add_argument("--default-page", default="index.html", help="Default page pro appku, při --dir typicky index.html")
     p.add_argument("--no-default", action="store_true", help="Nenastavovat default page")
     p.add_argument("--disable-after-upload", action="store_true", help="Po uploadu appku neaktivovat")
     p.add_argument("--keep-existing-resource", action="store_true", help="Nemazat existující resource před deployem")
@@ -429,8 +528,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_arg_parser().parse_args()
 
-    resource_name = args.resource_name or args.file.name
-
     client = SiemensWebApiClient(
         args.host,
         user=args.user,
@@ -440,16 +537,29 @@ def main() -> int:
     )
 
     try:
-        deploy_single_file(
-            client,
-            app_name=args.app,
-            local_file=args.file,
-            resource_name=resource_name,
-            media_type=args.media_type,
-            set_default=not args.no_default,
-            enable_app=not args.disable_after_upload,
-            delete_existing_resource=not args.keep_existing_resource,
-        )
+        if args.file is not None:
+            resource_name = args.resource_name or args.file.name
+            deploy_single_file(
+                client,
+                app_name=args.app,
+                local_file=args.file,
+                resource_name=resource_name,
+                media_type=args.media_type,
+                set_default=not args.no_default,
+                enable_app=not args.disable_after_upload,
+                delete_existing_resource=not args.keep_existing_resource,
+            )
+        else:
+            deploy_directory(
+                client,
+                app_name=args.app,
+                local_dir=args.dir,
+                set_default=not args.no_default,
+                enable_app=not args.disable_after_upload,
+                delete_existing_resource=not args.keep_existing_resource,
+                default_page=args.default_page,
+            )
+
         return 0
     except PlcApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)

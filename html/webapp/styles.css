@@ -1,0 +1,270 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  color: #1f2328;
+}
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  background: #1f2937;
+  color: #fff;
+  padding: 20px 16px;
+  flex-shrink: 0;
+}
+
+.sidebar h1 {
+  font-size: 22px;
+  margin: 0 0 6px 0;
+}
+
+.sidebar .sub {
+  font-size: 13px;
+  color: #cbd5e1;
+  margin-bottom: 20px;
+}
+
+.navbtn {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px 0;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  text-align: left;
+  background: #334155;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.navbtn.active {
+  background: #0ea5e9;
+}
+
+.content {
+  flex: 1;
+  padding: 22px;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d8dee4;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  max-width: 1100px;
+}
+
+h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+}
+
+h3 {
+  margin: 18px 0 8px 0;
+  font-size: 18px;
+}
+
+.muted {
+  color: #57606a;
+  font-size: 13px;
+}
+
+.sep {
+  height: 1px;
+  background: #eaeef2;
+  margin: 16px 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.box {
+  background: #f9fbfc;
+  border: 1px solid #e2e8ee;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.field {
+  margin: 10px 0;
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"] {
+  width: 240px;
+  padding: 8px 10px;
+  border: 1px solid #c5ccd3;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+input[type="range"] {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.btn {
+  margin-top: 10px;
+  margin-right: 8px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #0969da;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn.secondary {
+  background: #475569;
+}
+
+.cmd-btn {
+  margin-top: 10px;
+  margin-right: 8px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #9aa4b2;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  min-width: 120px;
+  transition: background 0.15s ease;
+}
+
+.cmd-btn.start-active {
+  background: #16a34a;
+}
+
+.cmd-btn.stop-active {
+  background: #dc2626;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #eef2f6;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.status-ok {
+  background: #e8fff0;
+  color: #116329;
+}
+
+.status-bad {
+  background: #ffe9e9;
+  color: #b42318;
+}
+
+.big-value {
+  font-size: 28px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.toggle-wrap {
+  margin-top: 10px;
+}
+
+.toggle-switch {
+  width: 74px;
+  height: 38px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  user-select: none;
+}
+
+.toggle-switch.active {
+  background: #22c55e;
+}
+
+.toggle-switch.safety-bad.active {
+  background: #ef4444;
+}
+
+.toggle-knob {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #ffffff;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  transition: left 0.2s ease;
+}
+
+.toggle-switch.active .toggle-knob {
+  left: 40px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 8px 12px;
+  font-size: 14px;
+  align-items: center;
+}
+
+.value-box {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #d8dee4;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+}
+
+.login-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; }
+  .grid { grid-template-columns: 1fr; }
+  input[type="text"],
+  input[type="password"],
+  input[type="number"] { width: 100%; }
+  .kv { grid-template-columns: 1fr; }
+}

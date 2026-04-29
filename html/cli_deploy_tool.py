@@ -21,7 +21,7 @@ Single file:
       --file .\index.html ^
       --insecure
 
-Celá složka:
+Celá složka: python .\cli_deploy_tool.py --host 192.168.3.30 --user json --password Qwertyuiop1 --app myapp --dir .\webapp --insecure  
     python .\cli_deploy_tool.py ^
       --host 192.168.3.30 ^
       --user json ^

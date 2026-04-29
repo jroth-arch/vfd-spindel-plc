@@ -157,3 +157,8 @@ Vysledek
 - zadne HTTPS varovani
 - funkcni Web API
 - pripravene pro vice PLC
+
+--------------------------------------------------
+Aktualni CA certifikat pro web a hmi je 
+ - vfd-spindel-plcWebserver-12_X509_Certificate_ID_12.der
+ - heslo pro certifikat je nazev projektu. V dobe, kdy jsem certifikat vytvarel byl nazev projektu vfd-spindel-plc-certificate_dodelat_webserver_spojeni 

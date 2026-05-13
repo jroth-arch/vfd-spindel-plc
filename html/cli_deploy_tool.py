@@ -21,7 +21,10 @@ Single file:
       --file .\index.html ^
       --insecure
 
-Celá složka: python .\cli_deploy_tool.py --host 192.168.3.30 --user json --password Qwertyuiop1 --app myapp --dir .\webapp --insecure  
+      
+Celá složka: 
+Testovaci stranky: python .\cli_deploy_tool.py --host 192.168.3.30 --user json --password Qwertyuiop1 --app testapp --dir .\webtestapp --insecure
+Produkcni stranky: python .\cli_deploy_tool.py --host 192.168.3.30 --user json --password Qwertyuiop1 --app myapp --dir .\webapp --insecure  
     python .\cli_deploy_tool.py ^
       --host 192.168.3.30 ^
       --user json ^

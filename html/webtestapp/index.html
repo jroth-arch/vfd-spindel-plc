@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PLC SAT Testovací rozhraní</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>PLC SAT Test App</h1>
+    <p>PLC-only SAT: zapis scenare do DB, cteni kontrolnich tagu a PASS/FAIL vyhodnoceni.</p>
+  </header>
+
+  <section class="card">
+    <h2>Pripojeni</h2>
+    <div class="row">
+      <label>
+        Uzivatel
+        <input id="apiUser" type="text" value="json">
+      </label>
+      <label>
+        Heslo
+        <input id="apiPassword" type="password" value="">
+      </label>
+      <div class="buttons">
+        <button class="primary" type="button" onclick="login()">Login</button>
+        <button type="button" onclick="logout()">Logout</button>
+      </div>
+    </div>
+    <p id="connStatus" class="status bad">Neprihlaseno</p>
+  </section>
+
+  <section class="card">
+    <h2>Scenare</h2>
+    <div id="scenarios" class="scenario-grid"></div>
+    <div class="buttons" style="margin-top:12px;">
+      <button class="primary" type="button" onclick="executeSelectedScenario()">Spustit scenar</button>
+      <button type="button" onclick="readSelectedScenarioOnly()">Jen precist kontrolni tagy</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Detail scenare</h2>
+    <div id="scenarioDetail" class="detail">Vyber scenar.</div>
+  </section>
+
+  <section class="card">
+    <h2>Vysledek</h2>
+    <p id="resultSummary" class="status">Zatim bez vysledku</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Tag</th>
+          <th>Expected</th>
+          <th>Actual</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="resultBody"></tbody>
+    </table>
+  </section>
+
+  <section class="card" id="aq1ChartSection" style="display:none">
+    <h2>Průběh AQ1_CurrentCtrl_V (SAT-06)</h2>
+    <div class="buttons">
+      <button type="button" id="aq1StartBtn">Zaznamenat průběh (5s)</button>
+      <button type="button" id="aq1ExportBtn" style="display:none">Exportovat CSV</button>
+    </div>
+    <div class="aq1-charts-row">
+      <div class="aq1-chart-box">
+        <h4>AQ1 napětí</h4>
+        <canvas id="aq1ChartVoltage" width="560" height="250"></canvas>
+      </div>
+      <div class="aq1-chart-box">
+        <h4>Přepočet na výstupní proud</h4>
+        <canvas id="aq1ChartCurrent" width="560" height="250"></canvas>
+      </div>
+    </div>
+    <p id="aq1ChartStatus">Připraveno</p>
+  </section>
+
+  <section class="card">
+    <h2>Manualni test (specificky pripad)</h2>
+    <div class="row">
+      <label>
+        Tag
+        <input id="manualTag" type="text" value='"DB_HMI".Spindle.Start'>
+      </label>
+      <label>
+        Hodnota
+        <input id="manualValue" type="text" value="true">
+      </label>
+      <div class="buttons">
+        <button class="primary" type="button" onclick="manualWrite()">Zapsat</button>
+        <button type="button" onclick="manualRead()">Precist</button>
+      </div>
+    </div>
+    <p id="manualOutput" class="status">---</p>
+  </section>
+
+  <section class="card">
+    <h2>Debug</h2>
+    <pre id="debug">---</pre>
+  </section>
+
+  <script src="chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<Tagtable name='ControllerTagsFolder'>
+  <!-- exported by 'Totally Integrated Automation Portal' version 2000.1.101.1   © 2004-2016 Siemens AG - all rights reserved -->
+  <Tag type='Bool' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%Q8.0'>DQ0_MI1_Run_Forward</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%QW0'>AQ0</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%IW0'>AI_Ch0</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%QW2'>AQ1</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%IW2'>AI_Ch1</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%QW4'>AQ2</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%QW6'>AQ3</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%IW6'>AI1_RTD</Tag>
+  <Tag type='Word' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%IW8'>AI2_RTD</Tag>
+  <Tag type='Bool' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%Q8.1'>DQ1_Reset_Button_Blue_LED</Tag>
+  <Tag type='Bool' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%Q8.2'>DQ2_Stop_Button_Red_Led</Tag>
+  <Tag type='Bool' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%I28.1'>DI1_SafetyRelay_Released_Safety_Button</Tag>
+  <Tag type='Bool' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%I28.0'>DI0_SafetyRelay_Aux</Tag>
+  <Tag type='Bool' hmiVisible='True' hmiWriteable='True' hmiAccessible='True' retain='False' remark='' addr='%Q8.3'>DQ3_LabPsu_Enable</Tag>
+</Tagtable>

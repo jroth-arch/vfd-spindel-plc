@@ -1,0 +1,920 @@
+﻿TYPE "UDT_SENSORS"
+VERSION : 0.1
+   STRUCT
+      AI1_Teplota_Lozisko_C : Real;
+      TM_Rotation_A_Channel : Real;
+   END_STRUCT;
+
+END_TYPE
+
+DATA_BLOCK "DB_HMI"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+   VAR 
+      Sensors { S7_SetPoint := 'False'} : "UDT_SENSORS";
+      System : Struct
+         Enable : Bool;
+      END_STRUCT;
+      Spindle : Struct
+         Start : Bool;
+         Stop : Bool;
+         ResetFault : Bool;
+         Speed_RPM : Real;
+         Enable : Bool;
+      END_STRUCT;
+      LabPSU : Struct
+         Enable : Bool;
+			Cycle_s : Real;
+			Mode : USInt;
+			BaseVoltage_V : Real;
+			DebugAmplitude_A : Real;
+			DebugFrequency_Hz : Real;
+			CurrentOffset_A : Real;
+			ConstCurrent_A : Real;
+      END_STRUCT;
+   END_VAR
+
+
+BEGIN
+	LabPSU.Enable := false;
+	LabPSU.Cycle_s := 0.01;
+	LabPSU.Mode := 1;
+	LabPSU.BaseVoltage_V := 2.0;
+	LabPSU.DebugAmplitude_A := 5.0;
+	LabPSU.DebugFrequency_Hz := 2.0;
+	LabPSU.CurrentOffset_A := 5.0;
+	LabPSU.ConstCurrent_A := 2.0;
+
+END_DATA_BLOCK
+
+TYPE "UDT_TM_COUNT"
+VERSION : 0.1
+   STRUCT
+      MeasuredValue : Real;
+   END_STRUCT;
+
+END_TYPE
+
+TYPE "UDT_IO_AQ"
+VERSION : 0.1
+   STRUCT
+      SpeedVoltage : Real;
+      AQ2_VoltageCtrl_V : Real;
+      AQ1_CurrentCtrl_V : Real;
+		AQ3_OutputOff : Real;
+   END_STRUCT;
+
+END_TYPE
+
+TYPE "UDT_IO_AI"
+VERSION : 0.1
+   STRUCT
+      AI1_TeplotaKomaraKartac_Ohm : Int;
+   END_STRUCT;
+
+END_TYPE
+
+TYPE "UDT_IO_DI"
+VERSION : 0.1
+   STRUCT
+      SafetyRelayAuxOk : Bool;
+      HSC_Couter : UInt;
+      EmergencyStop : Bool;
+      ExternalFault : Bool;
+   END_STRUCT;
+
+END_TYPE
+
+TYPE "UDT_IO_DQ"
+VERSION : 0.1
+   STRUCT
+      EmergencyStop : Bool;
+      EmergencyStopButtonLed : Bool;
+      ResetButtonLed : Bool;
+      RunForwardCmd : Bool;
+      FaultResetCmd : Bool;
+      MultiSpeed1 : Bool;
+      ExternalFault : Bool;
+   END_STRUCT;
+
+END_TYPE
+
+FUNCTION_BLOCK "FB_SafetyGate"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      Enable : Bool;   // hlavní povolení systému
+      EmergencyStop : Bool;   // 1 = E-Stop aktivní
+      SafetyRelayAuxOk : Bool;   // 1 = safety relé OK
+      ExternalFault : Bool;   // 1 = externí chyba
+      TempAlarm : Bool;   // 1 = kritická teplota
+      VibAlarm : Bool;   // 1 = kritické vibrace
+   END_VAR
+
+   VAR_OUTPUT 
+      SafetyOk : Bool;
+      PermitMotion : Bool;
+      TripActive : Bool;
+      TripCode : USInt;
+      StatusText : String[40];
+   END_VAR
+
+
+BEGIN
+	// hardware safety stav
+	#SafetyOk := #SafetyRelayAuxOk AND NOT #EmergencyStop;
+	
+	// centrální trip
+	#TripActive := (NOT #SafetyOk) OR #ExternalFault OR #TempAlarm OR #VibAlarm OR (NOT #Enable);
+	
+	// povolení pohybu
+	#PermitMotion := NOT #TripActive;
+	
+	// diagnostika
+	IF #EmergencyStop THEN
+	    #TripCode := 1;
+	    #StatusText := 'E-STOP ACTIVE';
+	ELSIF NOT #SafetyRelayAuxOk THEN
+	    #TripCode := 2;
+	    #StatusText := 'SAFETY RELAY NOT OK';
+	ELSIF #ExternalFault THEN
+	    #TripCode := 3;
+	    #StatusText := 'EXTERNAL FAULT';
+	ELSIF #TempAlarm THEN
+	    #TripCode := 4;
+	    #StatusText := 'TEMP ALARM';
+	ELSIF #VibAlarm THEN
+	    #TripCode := 5;
+	    #StatusText := 'VIBRATION ALARM';
+	ELSIF NOT #Enable THEN
+	    #TripCode := 6;
+	    #StatusText := 'SYSTEM NOT ENABLED';
+	ELSE
+	    #TripCode := 0;
+	    #StatusText := 'READY';
+	END_IF;
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK "FB_LabPSU"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      Enable : Bool := false;   // povolenÃ­ funkce z PLC/HMI
+      PermitOutput : Bool := false;   // interlock / safety gate
+      Mode : USInt := 0;   // 0=OFF, 1=CONST, 2=SINE_DEBUG ÄasovÃ¡ zÃ¡kladna
+      Cycle_s : Real := 0.01;   // typicky OB35 = 10 ms zdroj - zÃ¡kladnÃ­ nastavenÃ­
+      BaseVoltage_V : Real := 1.0;   // AQ2
+      CurrentOffset_A : Real := 0.0;   // DC offset proudu
+      DebugAmplitude_A : Real := 60.0;   // amplituda sinu pro debug
+      DebugFrequency_Hz : Real := 2.0;   // frekvence sinu pro debug konstantnÃ­ reÅ¾im
+      ConstCurrent_A : Real := 10.0;   // rampy
+      RampUp_A_per_s : Real := 50.0;
+      RampDown_A_per_s : Real := 80.0;   // parametry zdroje BK1900B
+	PSU_MinVoltage_V : Real := 0.8;   // minimalni napeti pro stabilni vystup zdroje
+      PSU_MaxVoltage_V : Real := 16.0;   // model 1900B
+      PSU_MaxCurrent_A : Real := 60.0;   // model 1900B
+      RemoteMaxCtrl_V : Real := 5.0;   // analog remote 0..5 V engineering outputs
+   END_VAR
+
+   VAR_OUTPUT 
+      VoltageSet_V : Real := 0.0;   // poÅ¾adovanÃ© napÄ›tÃ­ zdroje
+      CurrentSet_A : Real := 0.0;   // poÅ¾adovanÃ½ current limit analog outputs for PLC IO layer
+      AQ2_VoltageCtrl_V : Real := 0.0;   // 0..5 V na pin 2
+      AQ3_CurrentCtrl_V : Real := 0.0;   // 0..5 V na pin 3 digital output for pin 5
+	AQ_OutputOff_V : Real := 5.0;   // 0.0 V = enable, 5.0 V = output off
+      State : USInt := 0;   // 0 OFF, 1 CONST, 2 SINE
+      StatusText : String[40] := '';
+   END_VAR
+
+   VAR 
+      phase_rad : Real := 0.0;
+      omega : Real := 0.0;
+      targetCurrent_A : Real := 0.0;
+      sineValue : Real := 0.0;
+	effectiveOffset_A : Real := 0.0;
+	offsetAutoAdjusted : Bool := FALSE;
+   END_VAR
+
+
+BEGIN
+	// safety / permit
+	IF (NOT #Enable) OR (NOT #PermitOutput) THEN
+	    #phase_rad := 0.0;
+	    #VoltageSet_V := 0.0;
+	    #CurrentSet_A := 0.0;
+	    #AQ2_VoltageCtrl_V := 0.0;
+	    #AQ3_CurrentCtrl_V := 0.0;
+	    #AQ_OutputOff_V := 5.0;
+	    #State := 0;
+	    #StatusText := 'SAFE OFF';
+	    RETURN;
+	END_IF;
+	
+	// vystup zdroje povolen
+	#AQ_OutputOff_V := 0.0;
+	
+	// zakladni napeti
+	#VoltageSet_V := #BaseVoltage_V;
+	
+	// omezeni napeti
+	IF #VoltageSet_V < #PSU_MinVoltage_V THEN
+	    #VoltageSet_V := #PSU_MinVoltage_V;
+	END_IF;
+	IF #VoltageSet_V > #PSU_MaxVoltage_V THEN
+	    #VoltageSet_V := #PSU_MaxVoltage_V;
+	END_IF;
+	
+	CASE #Mode OF
+	    0: // OFF
+	        #CurrentSet_A := 0.0;
+	        #VoltageSet_V := 0.0;
+	        #AQ_OutputOff_V := 5.0;
+	        #State := 0;
+	        #StatusText := 'OFF';
+	        
+	    1: // CONST
+	        #targetCurrent_A := #ConstCurrent_A;
+	        
+	        IF #targetCurrent_A < 0.0 THEN
+	            #targetCurrent_A := 0.0;
+	        END_IF;
+	        IF #targetCurrent_A > #PSU_MaxCurrent_A THEN
+	            #targetCurrent_A := #PSU_MaxCurrent_A;
+	        END_IF;
+	        
+	        // jednoducha rampa
+	        IF #CurrentSet_A < #targetCurrent_A THEN
+	            #CurrentSet_A := #CurrentSet_A + (#RampUp_A_per_s * #Cycle_s);
+	            IF #CurrentSet_A > #targetCurrent_A THEN
+	                #CurrentSet_A := #targetCurrent_A;
+	            END_IF;
+	        ELSIF #CurrentSet_A > #targetCurrent_A THEN
+	            #CurrentSet_A := #CurrentSet_A - (#RampDown_A_per_s * #Cycle_s);
+	            IF #CurrentSet_A < #targetCurrent_A THEN
+	                #CurrentSet_A := #targetCurrent_A;
+	            END_IF;
+	        END_IF;
+	        
+	        #State := 1;
+	        #StatusText := 'CONST';
+	        
+	    2: // SINE_DEBUG
+	        #omega := 6.2831853 * #DebugFrequency_Hz; // 2*pi*f
+	        #offsetAutoAdjusted := FALSE;
+	        
+	        #phase_rad := #phase_rad + (#omega * #Cycle_s);
+	        
+	        // drzet fazi v rozumnem rozsahu
+	        IF #phase_rad > 6.2831853 THEN
+	            #phase_rad := #phase_rad - 6.2831853;
+	        END_IF;
+	        
+	        #sineValue := SIN(#phase_rad);
+	        
+	        // sinus s offsetem
+	        #effectiveOffset_A := #CurrentOffset_A;
+	        IF #effectiveOffset_A < #DebugAmplitude_A THEN
+	            #effectiveOffset_A := #DebugAmplitude_A;
+	            #offsetAutoAdjusted := TRUE;
+	        END_IF;
+	        #targetCurrent_A := #effectiveOffset_A + (#DebugAmplitude_A * #sineValue);
+	        // current limit zdroje nemuze byt zaporny
+	        IF #targetCurrent_A < 0.0 THEN
+	            #targetCurrent_A := 0.0;
+	        END_IF;
+	        
+	        IF #targetCurrent_A > #PSU_MaxCurrent_A THEN
+	            #targetCurrent_A := #PSU_MaxCurrent_A;
+	        END_IF;
+	        
+	        // volitelne muzes i tady nechat rampu, ale pro sinus ji vetsinou nechces moc agresivni
+	        #CurrentSet_A := #targetCurrent_A;
+	        
+	        #State := 2;
+	        IF #offsetAutoAdjusted THEN
+	            #StatusText := 'SINE DEBUG (AUTO OFFSET)';
+	        ELSE
+	            #StatusText := 'SINE DEBUG';
+	        END_IF;
+	        
+	    ELSE
+	        #CurrentSet_A := 0.0;
+	        #VoltageSet_V := 0.0;
+	        #AQ_OutputOff_V := 5.0;
+	        #State := 0;
+	        #StatusText := 'UNKNOWN->OFF';
+	END_CASE;
+	
+	// prevod engineering units -> BK remote control 0..5V
+	
+	// napeti
+	IF #PSU_MaxVoltage_V > 0.0 THEN
+	    #AQ2_VoltageCtrl_V := (#VoltageSet_V / #PSU_MaxVoltage_V) * #RemoteMaxCtrl_V;
+	ELSE
+	    #AQ2_VoltageCtrl_V := 0.0;
+	END_IF;
+	
+	// proud
+	IF #PSU_MaxCurrent_A > 0.0 THEN
+	    #AQ3_CurrentCtrl_V := (#CurrentSet_A / #PSU_MaxCurrent_A) * #RemoteMaxCtrl_V;
+	ELSE
+	    #AQ3_CurrentCtrl_V := 0.0;
+	END_IF;
+	
+	// clamp
+	IF #AQ2_VoltageCtrl_V < 0.0 THEN
+	    #AQ2_VoltageCtrl_V := 0.0;
+	END_IF;
+	IF #AQ2_VoltageCtrl_V > #RemoteMaxCtrl_V THEN
+	    #AQ2_VoltageCtrl_V := #RemoteMaxCtrl_V;
+	END_IF;
+	
+	IF #AQ3_CurrentCtrl_V < 0.0 THEN
+	    #AQ3_CurrentCtrl_V := 0.0;
+	END_IF;
+	IF #AQ3_CurrentCtrl_V > #RemoteMaxCtrl_V THEN
+	    #AQ3_CurrentCtrl_V := #RemoteMaxCtrl_V;
+	END_IF;
+	
+END_FUNCTION_BLOCK
+
+TYPE "UDT_LABPSU_STATUS"
+VERSION : 0.1
+   STRUCT
+      VoltageSet_V : Real;
+      CurrentSet_A : Real;
+      State : USInt;
+      StatusText : String[40];
+   END_STRUCT;
+
+END_TYPE
+
+TYPE "UDT_SAFETY_STATUS"
+VERSION : 0.1
+   STRUCT
+      SafetyOk : Bool;
+      PermitMotion : Bool;
+      TripActive : Bool;
+      TripCode : USInt;
+      StatusText : String[40];
+   END_STRUCT;
+
+END_TYPE
+
+DATA_BLOCK "DB_IO"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+   VAR 
+      DQ { S7_SetPoint := 'False'} : "UDT_IO_DQ";
+      DI : "UDT_IO_DI";
+      AI : "UDT_IO_AI";
+      TM : "UDT_TM_COUNT";
+      AQ : "UDT_IO_AQ";
+   END_VAR
+
+
+BEGIN
+	AQ.AQ3_OutputOff := 5.0;
+
+END_DATA_BLOCK
+
+TYPE "UDT_SPINDEL_STATUS"
+VERSION : 0.1
+   STRUCT
+      RunLatched : Bool;
+      TripActive : Bool;
+      State : USInt;
+      StatusText : String[40];
+   END_STRUCT;
+
+END_TYPE
+
+FUNCTION_BLOCK "FB_DriveCtrl"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      HMI_Start : Bool := false;   // start command (button)
+      HMI_Stop : Bool := false;   // stop command (button)
+      HMI_ResetFault : Bool := false;   // reset fault (button)
+      HMI_Speed_RPM : Real := 0.0;   // speed setpoint in RPM Interlocks / safety
+      PermitMotion : Bool := false;   // from safety gate
+      EmergencyStop : Bool := false;   // E-Stop chain
+      ExternalFaultIn : Bool := false;   // external fault input Parameters
+      SpeedMax_RPM : Real := 18000.0;   // max RPM corresponds to 10V
+      AO_MaxVolt : Real := 10.0;   // 0..10V
+      RampUp_RPM_per_s : Real := 6000.0;   // ramp up rate
+      RampDown_RPM_per_s : Real := 9000.0;   // ramp down rate
+      ResetPulse : Time := T#300MS;   // reset pulse length
+      RequireSpeedToRun : Bool := FALSE;   // if TRUE, Start only latches when setpoint > 0 Outputs to drive
+   END_VAR
+
+   VAR_OUTPUT 
+      DO_RunForward : Bool := false;
+      DO_FaultReset : Bool := false;
+      DO_MultiSpeed1 : Bool := false;
+      DO_ExternalFault : Bool := false;
+      AQ1_Voltage_0_10V : Real := 0.0;   // Status for HMI/diagnostics
+      RunLatched : Bool := false;   // internal run request latch
+      TripActive : Bool := false;   // interlock active
+      State : USInt := 0;   // 0 STOPPED, 1 RUN_CMD, 2 STOPPING, 3 TRIP
+      StatusText : String[40] := '';   // Edge detection
+   END_VAR
+
+   VAR 
+      prevStart : Bool := false;
+      prevStop : Bool := false;
+      prevReset : Bool := false;
+      startEdge : Bool := false;
+      stopEdge : Bool := false;
+      resetEdge : Bool := false;   // Ramp variables
+      speedCmdRPM : Real := 0.0;
+      speedRampRPM : Real := 0.0;   // Reset pulse timer
+      tReset {InstructionName := 'TON_TIME'; LibVersion := '1.0'; S7_SetPoint := 'False'} : TON_TIME;   // Cycle time assumption (OB1). Use OB35 for precise timing if needed.
+      cycle_s { S7_SetPoint := 'True'} : Real := 0.01;   // 10 ms default
+   END_VAR
+
+
+BEGIN
+	    // ------------------------------------------------------------
+	    // Edge detection for Start/Stop/Reset
+	    // ------------------------------------------------------------
+	    #startEdge := #HMI_Start AND NOT #prevStart;
+	    #stopEdge := #HMI_Stop AND NOT #prevStop;
+	    #resetEdge := #HMI_ResetFault AND NOT #prevReset;
+	    
+	    #prevStart := #HMI_Start;
+	    #prevStop := #HMI_Stop;
+	    #prevReset := #HMI_ResetFault;
+	    
+	    // ------------------------------------------------------------
+	    // Trip / interlock
+	    // Trip znamena zakaz běhu vřetene, pokud není splněna bezpečnostní podmínka. Trip = okamžité odstavení zařízení.
+	    // ------------------------------------------------------------
+	    #TripActive := (NOT #PermitMotion) OR #EmergencyStop OR #ExternalFaultIn;
+	    
+	    // External fault output to the drive (if wired this way)
+	    #DO_ExternalFault := #TripActive;
+	    
+	    // ------------------------------------------------------------
+	    // Sanitize setpoint
+	    // Sanitize = zkontrolovat a upravit vstupní hodnotu tak, aby byla bezpečná a platná.
+	    // ------------------------------------------------------------
+	    #speedCmdRPM := #HMI_Speed_RPM;
+	    IF #speedCmdRPM < 0.0 THEN
+	        #speedCmdRPM := 0.0;
+	    END_IF;
+	    IF #speedCmdRPM > #SpeedMax_RPM THEN
+	        #speedCmdRPM := #SpeedMax_RPM;
+	    END_IF;
+	    
+	    // ------------------------------------------------------------
+	    // Run latch logic (Stop has priority)
+	    // ------------------------------------------------------------
+	    IF #TripActive THEN
+	        #RunLatched := FALSE;
+	    ELSE
+	        IF #stopEdge OR #HMI_Stop THEN
+	            #RunLatched := FALSE;
+	        ELSIF #startEdge THEN
+	            IF (NOT #RequireSpeedToRun) OR (#speedCmdRPM > 0.0) THEN
+	                #RunLatched := TRUE;
+	            END_IF;
+	        END_IF;
+	    END_IF;
+	    
+	    // ------------------------------------------------------------
+	    // Fault reset pulse (recommended only when not running)
+	    // ------------------------------------------------------------
+	    #tReset(IN := (#resetEdge AND NOT #TripActive AND NOT #RunLatched),
+	            PT := #ResetPulse);
+	    #DO_FaultReset := #tReset.Q;
+	    
+	    // ------------------------------------------------------------
+	    // Defaults
+	    // ------------------------------------------------------------
+	    #DO_MultiSpeed1 := FALSE;
+	    
+	    // ------------------------------------------------------------
+	    // State (for HMI readability; no drive feedback available)
+	    // ------------------------------------------------------------
+	    IF #TripActive THEN
+	        #State := 3; // TRIP
+	    ELSE
+	        IF #RunLatched THEN
+	            #State := 1; // RUN_CMD
+	        ELSE
+	            IF #speedRampRPM > 0.0 THEN
+	                #State := 2; // STOPPING (ramp down)
+	            ELSE
+	                #State := 0; // STOPPED
+	            END_IF;
+	        END_IF;
+	    END_IF;
+	    
+	    CASE #State OF
+	        0:
+	            #StatusText := 'STOPPED';
+	        1:
+	            #StatusText := 'RUN CMD (no feedback)';
+	        2:
+	            #StatusText := 'STOPPING (ramp down)';
+	        3:
+	            #StatusText := 'TRIP (E-Stop/Interlock)';
+	        ELSE
+	            #StatusText := 'UNKNOWN';
+	    END_CASE;
+	    
+	    // ------------------------------------------------------------
+	    // Drive command + speed ramp
+	    // ------------------------------------------------------------
+	    IF #TripActive THEN
+	        #DO_RunForward := FALSE;
+	        #speedRampRPM := 0.0;
+	    ELSE
+	        IF #RunLatched THEN
+	            #DO_RunForward := TRUE;
+	            
+	            // Ramp toward setpoint (up & down)
+	            IF #speedRampRPM < #speedCmdRPM THEN
+	                #speedRampRPM := #speedRampRPM + (#RampUp_RPM_per_s * #cycle_s);
+	                IF #speedRampRPM > #speedCmdRPM THEN
+	                    #speedRampRPM := #speedCmdRPM;
+	                END_IF;
+	            ELSIF #speedRampRPM > #speedCmdRPM THEN
+	                #speedRampRPM := #speedRampRPM - (#RampDown_RPM_per_s * #cycle_s);
+	                IF #speedRampRPM < #speedCmdRPM THEN
+	                    #speedRampRPM := #speedCmdRPM;
+	                END_IF;
+	            END_IF;
+	            
+	        ELSE
+	            #DO_RunForward := FALSE;
+	            
+	            // Ramp down to 0
+	            IF #speedRampRPM > 0.0 THEN
+	                #speedRampRPM := #speedRampRPM - (#RampDown_RPM_per_s * #cycle_s);
+	                IF #speedRampRPM < 0.0 THEN
+	                    #speedRampRPM := 0.0;
+	                END_IF;
+	            END_IF;
+	        END_IF;
+	    END_IF;
+	    
+	    // ------------------------------------------------------------
+	    // RPM -> 0..10V conversion
+	    // ------------------------------------------------------------
+	    IF #SpeedMax_RPM > 0.0 THEN
+	        #AQ1_Voltage_0_10V := (#speedRampRPM / #SpeedMax_RPM) * #AO_MaxVolt;
+	    ELSE
+	        #AQ1_Voltage_0_10V := 0.0;
+	    END_IF;
+	    
+	    // ------------------------------------------------------------
+	    // Clamp AO (Clamp znamena omezit hodnotu tak, aby zůstala v daném rozsahu (min–max))
+	    //  ------------------------------------------------------------
+	    IF #AQ1_Voltage_0_10V < 0.0 THEN
+	        #AQ1_Voltage_0_10V := 0.0;
+	    END_IF;
+	    IF #AQ1_Voltage_0_10V > #AO_MaxVolt THEN
+	        #AQ1_Voltage_0_10V := #AO_MaxVolt;
+	    END_IF;
+	    
+	    // Hard safety
+	    IF #TripActive THEN
+	        #AQ1_Voltage_0_10V := 0.0;
+	    END_IF;
+	    
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK "FB_SafetyButtons"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      DI0_AuxSafetyRelay : Bool;   // AUX ze safety relé
+      DI1_SafetyButton : Bool;   // signal ze safety tlačítka
+   END_VAR
+
+   VAR_OUTPUT 
+      DQ1_LED : Bool;   // Cervene LED svetlo na STOP tlacitku
+      DQ0_LED : Bool;   // Modre LED reset svetlo
+   END_VAR
+
+
+BEGIN
+	// Bezpečný default
+	#DQ1_LED := FALSE;
+	#DQ0_LED := FALSE;
+	
+	// Vyhodnocení kombinací
+	IF (NOT #DI0_AuxSafetyRelay) AND (#DI1_SafetyButton) THEN
+	    // DI0 = 0, DI1 = 0
+	    #DQ1_LED := TRUE;
+	    #DQ0_LED := FALSE;
+	    
+	ELSIF (NOT #DI0_AuxSafetyRelay) AND (NOT #DI1_SafetyButton) THEN
+	    // DI0 = 0, DI1 = 1
+	    #DQ1_LED := FALSE;
+	    #DQ0_LED := TRUE;
+	    
+	ELSIF #DI0_AuxSafetyRelay AND (NOT #DI1_SafetyButton) THEN
+	    // DI0 = 1, DI1 = 1
+	    #DQ1_LED := FALSE;
+	    #DQ0_LED := FALSE;
+	    
+	ELSE
+	    // nezadaný stav: DI0 = 1, DI1 = 0
+	    // bezpečný stav
+	    #DQ1_LED := FALSE;
+	    #DQ0_LED := FALSE;
+	END_IF;
+END_FUNCTION_BLOCK
+
+DATA_BLOCK "DB_Status"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+   VAR 
+      Spindel { S7_SetPoint := 'False'} : "UDT_SPINDEL_STATUS";
+      Safety : "UDT_SAFETY_STATUS";
+      LabPSU { S7_SetPoint := 'False'} : "UDT_LABPSU_STATUS";
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "FB_SafetyButtons_DB"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_SafetyButtons"
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "Spindel"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_DriveCtrl"
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "TM_Counter"
+{InstructionName := 'High_Speed_Counter';
+ LibVersion := '5.0';
+ S7_Optimized_Access := 'TRUE' }
+AUTHOR : SIMATIC
+FAMILY : HSC
+NAME : HSC
+VERSION : 5.0
+NON_RETAIN
+High_Speed_Counter
+
+BEGIN
+   Configuration.HWID := 263;
+   Configuration.ChannelNo := 0;
+   Configuration.CounterInputs.SignalType := 0;
+   Configuration.CounterInputs.FilterFrequency := 3;
+
+END_DATA_BLOCK
+
+DATA_BLOCK "LabPSU"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_LabPSU"
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "Safety_1"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_SafetyGate"
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "DB_Alarms"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+   VAR 
+      TempHigh : Bool;
+      VibCritical : Bool;
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "DB_Config"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+	VAR
+		TempHighThreshold_C : Real;
+		VibCriticalThreshold : Real;
+		DAC_MaxDacRange : Int;
+		InputSim : Struct
+			EnableSafetyRelayAuxOverride : Bool;
+			SafetyRelayAuxOk : Bool;
+			EnableEmergencyStopOverride : Bool;
+			EmergencyStop : Bool;
+		END_STRUCT;
+	END_VAR
+
+BEGIN
+	TempHighThreshold_C := 35.0;
+	VibCriticalThreshold := 0.0;
+	DAC_MaxDacRange := 27648;
+	InputSim.EnableSafetyRelayAuxOverride := false;
+	InputSim.SafetyRelayAuxOk := true;
+	InputSim.EnableEmergencyStopOverride := false;
+	InputSim.EmergencyStop := false;
+
+END_DATA_BLOCK
+
+FUNCTION "FC_ConvertIO" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+	"DB_HMI".Sensors.AI1_Teplota_Lozisko_C := "DB_IO".AI.AI1_TeplotaKomaraKartac_Ohm / 10;
+	"DB_HMI".Sensors.TM_Rotation_A_Channel := ("DB_IO".TM.MeasuredValue * 60) / 2;
+END_FUNCTION
+
+FUNCTION "FC_IO_Map_Write" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+	"AQ0" := REAL_TO_INT("DB_IO".AQ.SpeedVoltage / 10.0 * 27648.0);
+	"AQ1" := REAL_TO_INT("DB_IO".AQ.AQ1_CurrentCtrl_V / 10.0 * 27648.0);
+	"AQ2" := REAL_TO_INT("DB_IO".AQ.AQ2_VoltageCtrl_V / 10.0 * 27648.0);
+	"AQ3" := REAL_TO_INT("DB_IO".AQ.AQ3_OutputOff / 10.0 * 27648.0);
+	
+	"DQ0_MI1_Run_Forward" := "DB_IO".DQ.RunForwardCmd;
+	"DQ1_Reset_Button_Blue_LED" := "DB_IO".DQ.ResetButtonLed;
+	"DQ2_Stop_Button_Red_Led" := "DB_IO".DQ.EmergencyStopButtonLed;
+END_FUNCTION
+
+FUNCTION "FC_IO_Map_Read" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+	IF "DB_Config".InputSim.EnableSafetyRelayAuxOverride THEN
+		"DB_IO".DI.SafetyRelayAuxOk := "DB_Config".InputSim.SafetyRelayAuxOk;
+	ELSE
+		"DB_IO".DI.SafetyRelayAuxOk := "DI0_SafetyRelay_Aux";
+	END_IF;
+	IF "DB_Config".InputSim.EnableEmergencyStopOverride THEN
+		"DB_IO".DI.EmergencyStop := "DB_Config".InputSim.EmergencyStop;
+	ELSE
+		"DB_IO".DI.EmergencyStop := NOT "DI1_SafetyRelay_Released_Safety_Button"; // DI1_SafetyRelay_Released_Safety_Button = False znamena, ze mame stisknute safety button, ktery je normally closed a po stisknuti se kontakt rozpoji a na vstupu je 0V
+	END_IF;
+	"DB_IO".AI.AI1_TeplotaKomaraKartac_Ohm := "AI1_RTD";
+END_FUNCTION
+
+DATA_BLOCK "FB_LabPSU_DB"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_LabPSU"
+
+BEGIN
+
+END_DATA_BLOCK
+
+ORGANIZATION_BLOCK "TimeSensitive"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_TEMP 
+      NormValue : Real;
+      ScaledValue : UInt;
+   END_VAR
+
+   VAR CONSTANT 
+      PI : Real := 3.141593;
+   END_VAR
+
+
+BEGIN
+	"LabPSU"(Enable := "DB_HMI".LabPSU.Enable,
+	         PermitOutput := "DB_Status".Safety.PermitMotion,
+	         Mode := "DB_HMI".LabPSU.Mode,
+	         Cycle_s := "DB_HMI".LabPSU.Cycle_s,
+	         BaseVoltage_V := "DB_HMI".LabPSU.BaseVoltage_V,
+	         CurrentOffset_A := "DB_HMI".LabPSU.CurrentOffset_A,
+	         DebugAmplitude_A := "DB_HMI".LabPSU.DebugAmplitude_A,
+	         DebugFrequency_Hz := "DB_HMI".LabPSU.DebugFrequency_Hz,
+	         ConstCurrent_A := "DB_HMI".LabPSU.ConstCurrent_A,
+	         RampUp_A_per_s := 50.0,
+	         RampDown_A_per_s := 80.0,
+	         PSU_MinVoltage_V := 0.8,
+	         PSU_MaxVoltage_V := 16.0,
+	         PSU_MaxCurrent_A := 60.0,
+	         RemoteMaxCtrl_V := 5.0,
+	         VoltageSet_V => "DB_Status".LabPSU.VoltageSet_V,
+	         CurrentSet_A => "DB_Status".LabPSU.CurrentSet_A,
+	         AQ2_VoltageCtrl_V => "DB_IO".AQ.AQ2_VoltageCtrl_V,
+	         AQ3_CurrentCtrl_V => "DB_IO".AQ.AQ1_CurrentCtrl_V,
+	         AQ_OutputOff_V => "DB_IO".AQ.AQ3_OutputOff,
+	         State => "DB_Status".LabPSU.State,
+	         StatusText => "DB_Status".LabPSU.StatusText);
+END_ORGANIZATION_BLOCK
+
+ORGANIZATION_BLOCK "Main"
+TITLE = "Main Program Sweep (Cycle)"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_TEMP 
+      WwwRetVal : Int;
+   END_VAR
+
+
+BEGIN
+	//******************************************************************
+	// IO MAP READ
+	//******************************************************************
+	"FC_IO_Map_Read"();
+	"TM_Counter"(SwGate:=TRUE,
+	             CaptureEnable:=FALSE,
+	             SyncEnable:=FALSE,
+	             ErrorAck:=FALSE,
+	             EventAck:=FALSE,
+	             MeasuredValue => "DB_IO".TM.MeasuredValue);
+	
+	"FC_ConvertIO"();
+	
+	
+	//******************************************************************
+	// CALL FB BLOCKS - PRODUCTION LOGIC
+	//******************************************************************
+	"DB_Alarms".TempHigh := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C > "DB_Config".TempHighThreshold_C;
+	
+	//Nektere safety signaly nemame implementovane - teplota, vibrace. Zatim bude potreba je simulovat
+	"Safety_1"(Enable:= TRUE, // This signal can be used to bind to another system in the future 
+	           EmergencyStop:="DB_IO".DI.EmergencyStop,
+	           SafetyRelayAuxOk:= "DB_IO".DI.SafetyRelayAuxOk,
+	           ExternalFault:= "DB_IO".DI.ExternalFault,
+	           TempAlarm:="DB_Alarms".TempHigh,
+	           VibAlarm:= "DB_Alarms".VibCritical,
+	           SafetyOk => "DB_Status".Safety.SafetyOk,
+	           PermitMotion => "DB_Status".Safety.PermitMotion,
+	           TripActive => "DB_Status".Safety.TripActive, // TripActive znamena "bezpecne odpojeni vykonovych vystupu systemu"
+	           TripCode => "DB_Status".Safety.TripCode,
+	           StatusText => "DB_Status".Safety.StatusText
+	);
+	
+	
+	"Spindel"(HMI_Start:= "DB_HMI".Spindle.Start,
+	          HMI_Stop:="DB_HMI".Spindle.Stop,
+	          HMI_ResetFault:="DB_HMI".Spindle.ResetFault,
+	          HMI_Speed_RPM:="DB_HMI".Spindle.Speed_RPM,
+	          PermitMotion:="DB_Status".Safety.PermitMotion,
+	          EmergencyStop:="DB_IO".DI.EmergencyStop,
+	          ExternalFaultIn:="DB_IO".DI.ExternalFault,
+	          SpeedMax_RPM:=18000.0,
+	          AO_MaxVolt:=10.0,
+	          RampUp_RPM_per_s:=6000.0,
+	          RampDown_RPM_per_s:=9000.0,
+	          ResetPulse:=T#300MS,
+	          RequireSpeedToRun:=FALSE,
+	          DO_RunForward=>"DB_IO".DQ.RunForwardCmd,
+	          DO_FaultReset=>"DB_IO".DQ.FaultResetCmd,
+	          DO_MultiSpeed1=>"DB_IO".DQ.MultiSpeed1,
+	          DO_ExternalFault=>"DB_IO".DQ.ExternalFault,
+	          AQ1_Voltage_0_10V=>"DB_IO".AQ.SpeedVoltage,
+	          RunLatched=>"DB_Status".Spindel.RunLatched,
+	          TripActive=>"DB_Status".Spindel.TripActive,
+	          State=>"DB_Status".Spindel.State,
+	          StatusText=>"DB_Status".Spindel.StatusText);
+	
+	
+	//******************************************************************
+	// CALL OTHER FB BLOCKS
+	//******************************************************************
+	"FB_SafetyButtons_DB"(DI0_AuxSafetyRelay:="DB_IO".DI.SafetyRelayAuxOk,
+	                      DI1_SafetyButton:="DB_IO".DI.EmergencyStop,
+	                      DQ0_LED=>"DB_IO".DQ.ResetButtonLed,
+	                      DQ1_LED=>"DB_IO".DQ.EmergencyStopButtonLed);
+	
+	//******************************************************************
+	// IO MAP WRITE
+	//******************************************************************
+	"FC_IO_Map_Write"();
+END_ORGANIZATION_BLOCK
+

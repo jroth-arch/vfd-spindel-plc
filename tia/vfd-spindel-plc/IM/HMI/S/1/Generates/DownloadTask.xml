@@ -2,10 +2,10 @@
 <DownloadTask>
   <ProjectInfo
     DeviceVersion="17.0.0.0"
-    CreationTime="2026-04-29 13:02:38 (UTC)"
+    CreationTime="2026-05-07 13:48:51 (UTC)"
     Runtime="SMART"
-    RtProjectName="vfd-spindel-plc-certificate_dodelat_webserver_spojeni.HMI_1[KTP700 Basic PN]"
-    RtProjectFolderName="vfd-spindel-plc-certificate_dodelat_webserver_spojeni.HMI_1[KTP700 Basic PN]"
+    RtProjectName="vfd-spindel-plc.HMI_1[KTP700 Basic PN]"
+    RtProjectFolderName="vfd-spindel-plc.HMI_1[KTP700 Basic PN]"
     DeviceType="KTP700_Basic"
     DisplayOrientation="0"
     RTReleaseNo="17.0.0.0"

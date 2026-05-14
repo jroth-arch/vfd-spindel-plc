@@ -184,6 +184,172 @@ Ucel: overit, ze i bez pripojeneho safety buttonu/rele lze pro SAT vynutit Safet
 - `"DB_Status".LabPSU.State == 2`
 - `"DB_IO".AQ.AQ1_CurrentCtrl_V` se v čase mění
 
+## SAT-07 – Truth table safety DI0/DI1 (simulace vsech kombinaci)
+
+Ucel: overit, ze vsechny 4 kombinace DI0/DI1 generuji spravny stav SafetyGate, PermitMotion a LED vystupy.
+Odkaz: viz [Safety_Logic_Table.md](Safety_Logic_Table.md)
+
+### Faze 1 – READY (DI1=1, DI0=1)
+
+#### Zapis
+- `"DB_Config".InputSim.EnableSafetyRelayAuxOverride = true`
+- `"DB_Config".InputSim.SafetyRelayAuxOk = true`
+- `"DB_Config".InputSim.EnableEmergencyStopOverride = true`
+- `"DB_Config".InputSim.EmergencyStop = false`
+
+#### Over
+- `"DB_Status".Safety.SafetyOk == true`
+- `"DB_Status".Safety.PermitMotion == true`
+- `"DB_Status".Safety.TripActive == false`
+- `"DB_Status".Safety.TripCode == 0`
+- `"DB_IO".DQ.EmergencyStopButtonLed == false`
+- `"DB_IO".DQ.ResetButtonLed == false`
+
+### Faze 2 – WAITING FOR RESET (DI1=1, DI0=0)
+
+#### Zapis
+- `"DB_Config".InputSim.SafetyRelayAuxOk = false`
+- `"DB_Config".InputSim.EmergencyStop = false`
+
+#### Over
+- `"DB_Status".Safety.SafetyOk == false`
+- `"DB_Status".Safety.TripActive == true`
+- `"DB_Status".Safety.TripCode == 2`
+- `"DB_IO".DQ.EmergencyStopButtonLed == false`
+- `"DB_IO".DQ.ResetButtonLed == true`
+
+### Faze 3 – E-STOP ACTIVE (DI1=0, DI0=0)
+
+#### Zapis
+- `"DB_Config".InputSim.SafetyRelayAuxOk = false`
+- `"DB_Config".InputSim.EmergencyStop = true`
+
+#### Over
+- `"DB_Status".Safety.SafetyOk == false`
+- `"DB_Status".Safety.TripActive == true`
+- `"DB_Status".Safety.TripCode == 1`
+- `"DB_IO".DQ.EmergencyStopButtonLed == true`
+- `"DB_IO".DQ.ResetButtonLed == false`
+
+### Faze 4 – E-STOP ACTIVE fault stav (DI1=0, DI0=1)
+
+#### Zapis
+- `"DB_Config".InputSim.SafetyRelayAuxOk = true`
+- `"DB_Config".InputSim.EmergencyStop = true`
+
+#### Over
+- `"DB_Status".Safety.SafetyOk == false`
+- `"DB_Status".Safety.TripActive == true`
+- `"DB_Status".Safety.TripCode == 1`
+- `"DB_IO".DQ.EmergencyStopButtonLed == true`
+- `"DB_IO".DQ.ResetButtonLed == false`
+
+---
+
+## Logovaci scénáře (LOG) – TDD
+
+Tyto scénáře jsou připraveny metodou Test Driven Development. Testy jsou dokumentovány a
+připraveny ve webtestapp, ale **budou selhávat dokud nebude implementována logika logování** v PLC.
+Odkazuj se na [logging_architecture.md](logging_architecture.md) pro detaily implementace.
+
+### LOG-01 – Start a stop testu
+
+Ucel: overit, ze `FB_LogManager` reaguje na start/stop prikaz.
+
+#### Predpodminka
+- Safety override aktivni, vreteno v klidu.
+
+#### Zapis
+- `"DB_LogConfig".Enable = true`
+- `"DB_HMI".Spindle.Start_Log = true`  *(HMI start testu – bude pridano)*
+
+#### Over
+- `"DB_LogRuntime".TestActive == true`
+- `"DB_LogRuntime".Elapsed_s == 0.0` (nebo velmi mala hodnota)
+- `"DB_LogRuntime".SampleCounter == 0` (nebo 1 po prvnim cyklu)
+
+#### Stop
+- `"DB_HMI".Spindle.Stop_Log = true`
+- `"DB_LogRuntime".TestActive == false`
+
+> **Status: EXPECTED FAIL** – DB_LogRuntime zatim neexistuje v PLC projektu, `FB_LogManager` neni napojen.
+
+---
+
+### LOG-02 – Plnění trend bufferu
+
+Ucel: overit, ze se trend buffer plni a TrendWriteIdx se pohybuje dopredu.
+
+#### Predpodminka
+- LOG-01 PASS (test je aktivni).
+
+#### Pockat
+- min. 500 ms (pri SampleTime_ms=200 = cca 2-3 vzorky)
+
+#### Over
+- `"DB_LogBuffer".TrendWriteIdx > 0`
+- `"DB_LogBuffer".TrendBuffer[0].t_s ~= 0.2`  (prvni vzorek = 200 ms)
+- `"DB_LogBuffer".TrendBuffer[0].State` je platna hodnota (0-3)
+
+> **Status: EXPECTED FAIL** – DB_LogBuffer zatim neexistuje v PLC projektu.
+
+---
+
+### LOG-03 – Trend buffer zaznamenava Trip event
+
+Ucel: overit, ze v okamziku tripu se zaznamena spravny TripCode.
+
+#### Predpodminka
+- LOG-02 PASS, vreteno bezi.
+
+#### Zapis
+- `"DB_Alarms".VibCritical = true`
+- pockat >= 300 ms
+
+#### Over
+- Nektery nedavny zaznam v `TrendBuffer` ma `TripActive == true`
+- Stejny zaznam ma `TripCode == 5` (VIBRATION ALARM)
+
+> **Status: EXPECTED FAIL** – DB_LogBuffer zatim neexistuje v PLC projektu.
+
+---
+
+### LOG-04 – Elapsed_s roste spravne
+
+Ucel: overit spravnost casovani.
+
+#### Predpodminka
+- LOG-01 PASS, test aktivni.
+
+#### Pockat 2 sekundy, pak precist
+
+#### Over
+- `"DB_LogRuntime".Elapsed_s >= 2.0`
+- `"DB_LogRuntime".Elapsed_s <= 3.0`  (tolerance 1 s)
+- `"DB_LogRuntime".SampleCounter >= 9`  (pri 200 ms = 10 vzorku/2s)
+
+> **Status: EXPECTED FAIL** – DB_LogRuntime zatim neexistuje v PLC projektu.
+
+---
+
+### LOG-05 – Konec testu po timeoutu
+
+Ucel: overit, ze po ubehnuti `TestDuration_s` se test sam zastavi.
+
+#### Predpodminka
+- LOG-01 PASS.
+
+#### Zapis
+- `"DB_LogConfig".TestDuration_s = 3`  (kratky test = 3 sekundy)
+
+#### Pockat >= 4 sekundy
+
+#### Over
+- `"DB_LogRuntime".TestActive == false`
+- `"DB_LogRuntime".Elapsed_s >= 3.0`
+
+> **Status: EXPECTED FAIL** – DB_LogRuntime zatim neexistuje v PLC projektu.
+
 ---
 
 ## Evidence pro předání zákazníkovi

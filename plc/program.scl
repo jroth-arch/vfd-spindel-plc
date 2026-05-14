@@ -1,11 +1,212 @@
-﻿TYPE "UDT_SENSORS"
+﻿// --- LOGGING FUNCTION BLOCK ---
+// Volani:
+//   OB30 (100ms): LogManager.SampleStep()   - plni buffer kazdych SampleEveryN_Cycles cyklu
+//   Main (OB1):   LogManager.FlushPending   - zkontroluj flag a zapis na SD
+FUNCTION_BLOCK "FB_LogManager"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+	VAR_INPUT
+		Enable : Bool;
+		StartTest : Bool;
+		StopTest : Bool;
+		RPM : Real;
+		T_Lozisko : Real;
+		T_Uhliky : Real;
+		Vibrace : Real;
+		ProudUhliky : Real;
+		State : USInt;
+		RunLatched : Bool;
+		TripActive : Bool;
+		TripCode : USInt;
+		SafetyText : String[40];
+		// SampleEveryN_Cycles: kolikrat se OB30 zavola nez se ulozi 1 vzorek
+		// Pr.: OB30 = 100ms, SampleEveryN = 2 -> vzorkovani 200ms
+		SampleEveryN_Cycles : Int := 2;
+		TestDuration_s : DInt := 86400;
+		FlushEveryN : Int := 100;
+	END_VAR
+
+	VAR_OUTPUT
+		FlushPending : Bool;       // TRUE = buffer ma dost dat -> Main muze zapsat na SD
+		TestTimeoutReached : Bool; // TRUE = test uplynul
+	END_VAR
+
+	VAR
+		prevStartTest : Bool := FALSE;
+		prevStopTest : Bool := FALSE;
+		cycleCounter : Int := 0;
+		flushCounter : Int := 0;
+	END_VAR
+
+BEGIN
+	// Detekce startu testu (hrana)
+	IF Enable AND (StartTest AND NOT prevStartTest) THEN
+		"DB_LogRuntime".TestActive := TRUE;
+		"DB_LogRuntime".Elapsed_s := 0.0;
+		"DB_LogRuntime".SampleCounter := 0;
+		"DB_LogBuffer".TrendWriteIdx := 0;
+		"DB_LogBuffer".TrendReadIdx := 0;
+		cycleCounter := 0;
+		flushCounter := 0;
+		FlushPending := FALSE;
+		TestTimeoutReached := FALSE;
+		// (event log: TEST_START)
+	END_IF;
+
+	// Detekce stopu testu (hrana)
+	IF Enable AND (StopTest AND NOT prevStopTest) THEN
+		"DB_LogRuntime".TestActive := FALSE;
+		// (event log: TEST_STOP)
+	END_IF;
+
+	prevStartTest := StartTest;
+	prevStopTest := StopTest;
+
+	// Cyklické vzorkování pouze pokud test běží
+	IF Enable AND "DB_LogRuntime".TestActive THEN
+		cycleCounter := cycleCounter + 1;
+
+		IF cycleCounter >= SampleEveryN_Cycles THEN
+			cycleCounter := 0;
+
+			// Cas od startu: kazdy vzorek = SampleEveryN * 0.1s (OB30 period)
+			"DB_LogRuntime".Elapsed_s := "DB_LogRuntime".Elapsed_s
+				+ (INT_TO_REAL(SampleEveryN_Cycles) * 0.1);
+
+			// Zapis vzorku do kruhoveho bufferu
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].t_s := "DB_LogRuntime".Elapsed_s;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RPM := RPM;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Lozisko := T_Lozisko;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Uhliky := T_Uhliky;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].Vibrace := Vibrace;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].ProudUhliky := ProudUhliky;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].State := State;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RunLatched := RunLatched;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripActive := TripActive;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripCode := TripCode;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].SafetyText := SafetyText;
+
+			// Posun indexu (kruhový buffer)
+			"DB_LogBuffer".TrendWriteIdx := "DB_LogBuffer".TrendWriteIdx + 1;
+			IF "DB_LogBuffer".TrendWriteIdx > 999 THEN
+				"DB_LogBuffer".TrendWriteIdx := 0;
+			END_IF;
+			"DB_LogRuntime".SampleCounter := "DB_LogRuntime".SampleCounter + 1;
+
+			// FlushPending: Main vi, ze je cas zapsat na SD
+			flushCounter := flushCounter + 1;
+			IF flushCounter >= FlushEveryN THEN
+				flushCounter := 0;
+				FlushPending := TRUE;
+			END_IF;
+		END_IF;
+
+		// Konec testu po uplynutí času
+		IF "DB_LogRuntime".Elapsed_s >= DINT_TO_REAL(TestDuration_s) THEN
+			"DB_LogRuntime".TestActive := FALSE;
+			TestTimeoutReached := TRUE;
+			FlushPending := TRUE;   // posledni flush
+			// (event log: TEST_END_TIMEOUT)
+		END_IF;
+	END_IF;
+END_FUNCTION_BLOCK
+TYPE "UDT_SENSORS"
 VERSION : 0.1
    STRUCT
       AI1_Teplota_Lozisko_C : Real;
       TM_Rotation_A_Channel : Real;
    END_STRUCT;
 
+
 END_TYPE
+
+// --- LOGGING UDTs ---
+TYPE "UDT_LogRecord"
+VERSION : 0.1
+	STRUCT
+		t_s : Real;
+		RPM : Real;
+		T_Lozisko : Real;
+		T_Uhliky : Real;
+		Vibrace : Real;
+		ProudUhliky : Real;
+		State : USInt;
+		RunLatched : Bool;
+		TripActive : Bool;
+		TripCode : USInt;
+		SafetyText : String[40];
+	END_STRUCT;
+END_TYPE
+
+TYPE "UDT_EventRecord"
+VERSION : 0.1
+	STRUCT
+		t_s : Real;
+		EventCode : USInt;
+		EventText : String[32];
+		State : USInt;
+		TripCode : USInt;
+		SafetyText : String[40];
+	END_STRUCT;
+END_TYPE
+
+DATA_BLOCK "DB_LogConfig"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+	VAR
+		Enable : Bool;
+		SampleTime_ms : Int;
+		TestDuration_s : DInt;
+		FlushEveryN : Int;
+		FilePrefix : String[16];
+	END_VAR
+BEGIN
+	Enable := false;
+	SampleTime_ms := 200;
+	TestDuration_s := 86400;
+	FlushEveryN := 100;
+	FilePrefix := 'testlog';
+END_DATA_BLOCK
+
+DATA_BLOCK "DB_LogRuntime"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+	VAR
+		TestActive : Bool;
+		TestStartTs : Date_And_Time;
+		Elapsed_s : Real;
+		SampleCounter : DInt;
+		LastFlushOk : Bool;
+		LastError : String[40];
+	END_VAR
+BEGIN
+	TestActive := false;
+	Elapsed_s := 0.0;
+	SampleCounter := 0;
+	LastFlushOk := true;
+	LastError := '';
+END_DATA_BLOCK
+
+DATA_BLOCK "DB_LogBuffer"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+	VAR
+		TrendBuffer : ARRAY[0..999] OF "UDT_LogRecord";
+		EventBuffer : ARRAY[0..99] OF "UDT_EventRecord";
+		TrendWriteIdx : Int;
+		TrendReadIdx : Int;
+		EventWriteIdx : Int;
+		EventReadIdx : Int;
+	END_VAR
+BEGIN
+	TrendWriteIdx := 0;
+	TrendReadIdx := 0;
+	EventWriteIdx := 0;
+	EventReadIdx := 0;
+END_DATA_BLOCK
 
 DATA_BLOCK "DB_HMI"
 { S7_Optimized_Access := 'TRUE' }
@@ -834,87 +1035,26 @@ BEGIN
 	         AQ_OutputOff_V => "DB_IO".AQ.AQ3_OutputOff,
 	         State => "DB_Status".LabPSU.State,
 	         StatusText => "DB_Status".LabPSU.StatusText);
-END_ORGANIZATION_BLOCK
 
-ORGANIZATION_BLOCK "Main"
-TITLE = "Main Program Sweep (Cycle)"
-{ S7_Optimized_Access := 'TRUE' }
-VERSION : 0.1
-   VAR_TEMP 
-      WwwRetVal : Int;
-   END_VAR
-
-
-BEGIN
-	//******************************************************************
-	// IO MAP READ
-	//******************************************************************
-	"FC_IO_Map_Read"();
-	"TM_Counter"(SwGate:=TRUE,
-	             CaptureEnable:=FALSE,
-	             SyncEnable:=FALSE,
-	             ErrorAck:=FALSE,
-	             EventAck:=FALSE,
-	             MeasuredValue => "DB_IO".TM.MeasuredValue);
-	
-	"FC_ConvertIO"();
-	
-	
-	//******************************************************************
-	// CALL FB BLOCKS - PRODUCTION LOGIC
-	//******************************************************************
-	"DB_Alarms".TempHigh := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C > "DB_Config".TempHighThreshold_C;
-	
-	//Nektere safety signaly nemame implementovane - teplota, vibrace. Zatim bude potreba je simulovat
-	"Safety_1"(Enable:= TRUE, // This signal can be used to bind to another system in the future 
-	           EmergencyStop:="DB_IO".DI.EmergencyStop,
-	           SafetyRelayAuxOk:= "DB_IO".DI.SafetyRelayAuxOk,
-	           ExternalFault:= "DB_IO".DI.ExternalFault,
-	           TempAlarm:="DB_Alarms".TempHigh,
-	           VibAlarm:= "DB_Alarms".VibCritical,
-	           SafetyOk => "DB_Status".Safety.SafetyOk,
-	           PermitMotion => "DB_Status".Safety.PermitMotion,
-	           TripActive => "DB_Status".Safety.TripActive, // TripActive znamena "bezpecne odpojeni vykonovych vystupu systemu"
-	           TripCode => "DB_Status".Safety.TripCode,
-	           StatusText => "DB_Status".Safety.StatusText
+	// Logovani - vzorkovani v OB30 (100ms), SampleEveryN=2 -> 200ms vzorek
+	// File I/O (FlushPending) se zpracovava v Main (OB1), ne zde
+	"LogManager"(
+		Enable := "DB_LogConfig".Enable,
+		StartTest := FALSE,   // TODO: napojit na HMI tlacitko start testu
+		StopTest := FALSE,    // TODO: napojit na HMI tlacitko stop testu
+		RPM := "DB_HMI".Sensors.TM_Rotation_A_Channel,
+		T_Lozisko := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C,
+		T_Uhliky := 0.0,      // TODO: napojit na skutecny senzor teploty uhliku
+		Vibrace := 0.0,       // TODO: napojit na skutecny senzor vibraci
+		ProudUhliky := ("DB_IO".AQ.AQ1_CurrentCtrl_V / 5.0) * 60.0,
+		State := "DB_Status".Spindel.State,
+		RunLatched := "DB_Status".Spindel.RunLatched,
+		TripActive := "DB_Status".Safety.TripActive,
+		TripCode := "DB_Status".Safety.TripCode,
+		SafetyText := "DB_Status".Safety.StatusText,
+		SampleEveryN_Cycles := 2,
+		TestDuration_s := "DB_LogConfig".TestDuration_s,
+		FlushEveryN := "DB_LogConfig".FlushEveryN
 	);
-	
-	
-	"Spindel"(HMI_Start:= "DB_HMI".Spindle.Start,
-	          HMI_Stop:="DB_HMI".Spindle.Stop,
-	          HMI_ResetFault:="DB_HMI".Spindle.ResetFault,
-	          HMI_Speed_RPM:="DB_HMI".Spindle.Speed_RPM,
-	          PermitMotion:="DB_Status".Safety.PermitMotion,
-	          EmergencyStop:="DB_IO".DI.EmergencyStop,
-	          ExternalFaultIn:="DB_IO".DI.ExternalFault,
-	          SpeedMax_RPM:=18000.0,
-	          AO_MaxVolt:=10.0,
-	          RampUp_RPM_per_s:=6000.0,
-	          RampDown_RPM_per_s:=9000.0,
-	          ResetPulse:=T#300MS,
-	          RequireSpeedToRun:=FALSE,
-	          DO_RunForward=>"DB_IO".DQ.RunForwardCmd,
-	          DO_FaultReset=>"DB_IO".DQ.FaultResetCmd,
-	          DO_MultiSpeed1=>"DB_IO".DQ.MultiSpeed1,
-	          DO_ExternalFault=>"DB_IO".DQ.ExternalFault,
-	          AQ1_Voltage_0_10V=>"DB_IO".AQ.SpeedVoltage,
-	          RunLatched=>"DB_Status".Spindel.RunLatched,
-	          TripActive=>"DB_Status".Spindel.TripActive,
-	          State=>"DB_Status".Spindel.State,
-	          StatusText=>"DB_Status".Spindel.StatusText);
-	
-	
-	//******************************************************************
-	// CALL OTHER FB BLOCKS
-	//******************************************************************
-	"FB_SafetyButtons_DB"(DI0_AuxSafetyRelay:="DB_IO".DI.SafetyRelayAuxOk,
-	                      DI1_SafetyButton:="DB_IO".DI.EmergencyStop,
-	                      DQ0_LED=>"DB_IO".DQ.ResetButtonLed,
-	                      DQ1_LED=>"DB_IO".DQ.EmergencyStopButtonLed);
-	
-	//******************************************************************
-	// IO MAP WRITE
-	//******************************************************************
-	"FC_IO_Map_Write"();
 END_ORGANIZATION_BLOCK
 

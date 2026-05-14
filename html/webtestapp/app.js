@@ -198,6 +198,162 @@ const SCENARIOS = [
       { tag: '"DB_HMI".LabPSU.DebugAmplitude_A', op: 'eq', expected: 5.0 },
       { tag: '"DB_HMI".LabPSU.DebugFrequency_Hz', op: 'eq', expected: 2.0 }
     ]
+  },
+  {
+    id: 'SAT-07',
+    name: 'Truth table safety DI0/DI1',
+    description: 'Overi vsechny 4 kombinace DI0/DI1 a odpovídající stav safety, PermitMotion a LED vystupy.',
+    stages: [
+      {
+        name: 'Faze 1: READY (DI1=1, DI0=1)',
+        writes: [
+          { tag: '"DB_Config".InputSim.EnableSafetyRelayAuxOverride', value: true },
+          { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: true },
+          { tag: '"DB_Config".InputSim.EnableEmergencyStopOverride', value: true },
+          { tag: '"DB_Config".InputSim.EmergencyStop', value: false }
+        ],
+        delayMs: 250,
+        checks: [
+          { tag: '"DB_Status".Safety.SafetyOk', op: 'eq', expected: true },
+          { tag: '"DB_Status".Safety.PermitMotion', op: 'eq', expected: true },
+          { tag: '"DB_Status".Safety.TripActive', op: 'eq', expected: false },
+          { tag: '"DB_Status".Safety.TripCode', op: 'eq', expected: 0 },
+          { tag: '"DB_IO".DQ.EmergencyStopButtonLed', op: 'eq', expected: false },
+          { tag: '"DB_IO".DQ.ResetButtonLed', op: 'eq', expected: false }
+        ]
+      },
+      {
+        name: 'Faze 2: WAITING FOR RESET (DI1=1, DI0=0)',
+        writes: [
+          { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: false },
+          { tag: '"DB_Config".InputSim.EmergencyStop', value: false }
+        ],
+        delayMs: 250,
+        checks: [
+          { tag: '"DB_Status".Safety.SafetyOk', op: 'eq', expected: false },
+          { tag: '"DB_Status".Safety.TripActive', op: 'eq', expected: true },
+          { tag: '"DB_Status".Safety.TripCode', op: 'eq', expected: 2 },
+          { tag: '"DB_IO".DQ.EmergencyStopButtonLed', op: 'eq', expected: false },
+          { tag: '"DB_IO".DQ.ResetButtonLed', op: 'eq', expected: true }
+        ]
+      },
+      {
+        name: 'Faze 3: E-STOP ACTIVE (DI1=0, DI0=0)',
+        writes: [
+          { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: false },
+          { tag: '"DB_Config".InputSim.EmergencyStop', value: true }
+        ],
+        delayMs: 250,
+        checks: [
+          { tag: '"DB_Status".Safety.SafetyOk', op: 'eq', expected: false },
+          { tag: '"DB_Status".Safety.TripActive', op: 'eq', expected: true },
+          { tag: '"DB_Status".Safety.TripCode', op: 'eq', expected: 1 },
+          { tag: '"DB_IO".DQ.EmergencyStopButtonLed', op: 'eq', expected: true },
+          { tag: '"DB_IO".DQ.ResetButtonLed', op: 'eq', expected: false }
+        ]
+      },
+      {
+        name: 'Faze 4: E-STOP fault stav (DI1=0, DI0=1)',
+        writes: [
+          { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: true },
+          { tag: '"DB_Config".InputSim.EmergencyStop', value: true }
+        ],
+        delayMs: 250,
+        checks: [
+          { tag: '"DB_Status".Safety.SafetyOk', op: 'eq', expected: false },
+          { tag: '"DB_Status".Safety.TripActive', op: 'eq', expected: true },
+          { tag: '"DB_Status".Safety.TripCode', op: 'eq', expected: 1 },
+          { tag: '"DB_IO".DQ.EmergencyStopButtonLed', op: 'eq', expected: true },
+          { tag: '"DB_IO".DQ.ResetButtonLed', op: 'eq', expected: false }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'LOG-01',
+    name: 'Start a stop testu (logging)',
+    description: 'Overi, ze FB_LogManager reaguje na start/stop prikaz.',
+    expectedFail: true,
+    expectedFailReason: 'DB_LogRuntime zatim neexistuje v PLC projektu – implementace logování není hotova.',
+    writes: [
+      { tag: '"DB_LogConfig".Enable', value: true }
+    ],
+    delayMs: 300,
+    checks: [
+      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: false },
+      { tag: '"DB_LogRuntime".Elapsed_s', op: 'eq', expected: 0.0 },
+      { tag: '"DB_LogRuntime".SampleCounter', op: 'eq', expected: 0 }
+    ]
+  },
+  {
+    id: 'LOG-02',
+    name: 'Plnění trend bufferu',
+    description: 'Overi, ze se TrendWriteIdx pohybuje dopredu po spusteni testu.',
+    expectedFail: true,
+    expectedFailReason: 'DB_LogBuffer zatim neexistuje v PLC projektu.',
+    writes: [
+      { tag: '"DB_LogConfig".Enable', value: true }
+    ],
+    delayMs: 600,
+    checks: [
+      { tag: '"DB_LogBuffer".TrendWriteIdx', op: 'gt', expected: 0 }
+    ]
+  },
+  {
+    id: 'LOG-03',
+    name: 'Trend buffer zaznamenava Trip',
+    description: 'Overi, ze pri tripu se zaznamenava TripCode == 5 (VibAlarm).',
+    expectedFail: true,
+    expectedFailReason: 'DB_LogBuffer zatim neexistuje v PLC projektu.',
+    stages: [
+      {
+        name: 'Faze A: Trigger VibCritical',
+        writes: [
+          { tag: '"DB_Config".InputSim.EnableSafetyRelayAuxOverride', value: true },
+          { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: true },
+          { tag: '"DB_Config".InputSim.EnableEmergencyStopOverride', value: true },
+          { tag: '"DB_Config".InputSim.EmergencyStop', value: false },
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_Alarms".VibCritical', value: true }
+        ],
+        delayMs: 350,
+        checks: [
+          { tag: '"DB_LogBuffer".TrendBuffer[0].TripActive', op: 'eq', expected: true },
+          { tag: '"DB_LogBuffer".TrendBuffer[0].TripCode', op: 'eq', expected: 5 }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'LOG-04',
+    name: 'Elapsed_s roste spravne',
+    description: 'Overi, ze Elapsed_s po 2 sekundach odpovidá skutecnemu casu.',
+    expectedFail: true,
+    expectedFailReason: 'DB_LogRuntime zatim neexistuje v PLC projektu.',
+    writes: [
+      { tag: '"DB_LogConfig".Enable', value: true }
+    ],
+    delayMs: 2100,
+    checks: [
+      { tag: '"DB_LogRuntime".Elapsed_s', op: 'gt', expected: 2.0 },
+      { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: 8 }
+    ]
+  },
+  {
+    id: 'LOG-05',
+    name: 'Konec testu po timeoutu',
+    description: 'Overi, ze po TestDuration_s se test sam zastavi.',
+    expectedFail: true,
+    expectedFailReason: 'DB_LogRuntime zatim neexistuje v PLC projektu.',
+    writes: [
+      { tag: '"DB_LogConfig".Enable', value: true },
+      { tag: '"DB_LogConfig".TestDuration_s', value: 3 }
+    ],
+    delayMs: 4000,
+    checks: [
+      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: false },
+      { tag: '"DB_LogRuntime".Elapsed_s', op: 'gt', expected: 3.0 }
+    ]
   }
 ];
 
@@ -600,9 +756,14 @@ async function executeSelectedScenario() {
         }
       }
 
-      renderResult(allRows);
+      renderResult(allRows, scenario.expectedFail);
       const allOk = allRows.every((r) => r.ok);
-      setResultSummary((allOk ? 'PASS' : 'FAIL') + ' - ' + scenario.id + ' (' + allRows.filter((r) => r.ok).length + '/' + allRows.length + ')', allOk);
+      if (scenario.expectedFail) {
+        setResultSummary((allOk ? 'PASS (unexpected!)' : 'EXPECTED FAIL') + ' - ' + scenario.id, allOk ? true : null, true);
+        if (!allOk && scenario.expectedFailReason) debug('Expected fail: ' + scenario.expectedFailReason);
+      } else {
+        setResultSummary((allOk ? 'PASS' : 'FAIL') + ' - ' + scenario.id + ' (' + allRows.filter((r) => r.ok).length + '/' + allRows.length + ')', allOk);
+      }
       return;
     }
 
@@ -660,10 +821,18 @@ async function readSelectedScenarioOnly() {
 async function evaluateScenario(scenario) {
   const rows = await evaluateChecks(scenario.checks || [], 'Result');
 
-  renderResult(rows);
+  renderResult(rows, scenario.expectedFail);
 
   const allOk = rows.every((r) => r.ok);
-  setResultSummary((allOk ? 'PASS' : 'FAIL') + ' - ' + scenario.id + ' (' + rows.filter((r) => r.ok).length + '/' + rows.length + ')', allOk);
+  if (scenario.expectedFail) {
+    const label = allOk ? 'PASS (unexpected!)' : 'EXPECTED FAIL';
+    setResultSummary(label + ' - ' + scenario.id, allOk ? true : null, true);
+    if (!allOk && scenario.expectedFailReason) {
+      debug('Expected fail: ' + scenario.expectedFailReason);
+    }
+  } else {
+    setResultSummary((allOk ? 'PASS' : 'FAIL') + ' - ' + scenario.id + ' (' + rows.filter((r) => r.ok).length + '/' + rows.length + ')', allOk);
+  }
 }
 
 async function evaluateChecks(checks, stageName) {
@@ -708,28 +877,40 @@ function compare(actual, check) {
   }
 }
 
-function renderResult(rows) {
+function renderResult(rows, expectedFail = false) {
   const tbody = document.getElementById('resultBody');
   tbody.innerHTML = '';
 
   rows.forEach((r) => {
     const tr = document.createElement('tr');
+    let pillClass, pillText;
+    if (r.ok) {
+      pillClass = 'pill pass';
+      pillText = 'PASS';
+    } else if (expectedFail) {
+      pillClass = 'pill expected-fail';
+      pillText = 'EXPECTED FAIL';
+    } else {
+      pillClass = 'pill fail';
+      pillText = 'FAIL';
+    }
     tr.innerHTML = `
       <td><code>${escapeHtml((r.stage ? '[' + r.stage + '] ' : '') + r.tag)}</code></td>
       <td>${escapeHtml(String(r.expected))}</td>
       <td>${escapeHtml(String(r.actual))}</td>
-      <td><span class="${r.ok ? 'pill pass' : 'pill fail'}">${r.ok ? 'PASS' : 'FAIL'}</span></td>
+      <td><span class="${pillClass}">${pillText}</span></td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-function setResultSummary(text, ok = null) {
+function setResultSummary(text, ok = null, expectedFail = false) {
   const el = document.getElementById('resultSummary');
   el.textContent = text;
   el.className = 'status';
   if (ok === true) el.classList.add('ok');
-  if (ok === false) el.classList.add('bad');
+  else if (expectedFail) el.classList.add('expected-fail');
+  else if (ok === false) el.classList.add('bad');
 }
 
 function parseManualValue(input) {

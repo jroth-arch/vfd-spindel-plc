@@ -212,6 +212,17 @@ th {
 	background: var(--bad-bg);
 }
 
+.pill.expected-fail {
+	color: #92400e;
+	background: #fef3c7;
+}
+
+.status.expected-fail {
+	color: #92400e;
+	border-color: #fcd34d;
+	background: #fef3c7;
+}
+
 pre {
 	margin: 0;
 	white-space: pre-wrap;

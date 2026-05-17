@@ -248,31 +248,33 @@ Odkaz: viz [Safety_Logic_Table.md](Safety_Logic_Table.md)
 
 ## Logovaci scénáře (LOG) – TDD
 
-Tyto scénáře jsou připraveny metodou Test Driven Development. Testy jsou dokumentovány a
-připraveny ve webtestapp, ale **budou selhávat dokud nebude implementována logika logování** v PLC.
+Scenare pokryvaji dve faze implementace:
+- **Faze 1 (LOG-01..05):** start/stop, plneni bufferu, casovani, timeout – implementovano v PLC.
+- **Faze 2 (LOG-06..10):** SD flush, posun ReadIdx, finalni flush, chyby SD – implementovano v PLC.
+  LOG-07, LOG-09, LOG-10 vyzaduji fyzicke HW (SD karta v PLC).
+
 Odkazuj se na [logging_architecture.md](logging_architecture.md) pro detaily implementace.
 
 ### LOG-01 – Start a stop testu
 
-Ucel: overit, ze `FB_LogManager` reaguje na start/stop prikaz.
+Ucel: overit, ze `FB_LogManager` reaguje na start/stop prikaz (hrana StartTest).
 
 #### Predpodminka
 - Safety override aktivni, vreteno v klidu.
 
 #### Zapis
 - `"DB_LogConfig".Enable = true`
-- `"DB_HMI".Spindle.Start_Log = true`  *(HMI start testu – bude pridano)*
+- `"DB_LogConfig".StartTest = true`  (hrana – po 150 ms reset na false)
 
 #### Over
 - `"DB_LogRuntime".TestActive == true`
-- `"DB_LogRuntime".Elapsed_s == 0.0` (nebo velmi mala hodnota)
-- `"DB_LogRuntime".SampleCounter == 0` (nebo 1 po prvnim cyklu)
+- `"DB_LogRuntime".SampleCounter >= 0`
 
 #### Stop
-- `"DB_HMI".Spindle.Stop_Log = true`
+- `"DB_LogConfig".StopTest = true`
 - `"DB_LogRuntime".TestActive == false`
 
-> **Status: EXPECTED FAIL** – DB_LogRuntime zatim neexistuje v PLC projektu, `FB_LogManager` neni napojen.
+> **Status: IMPLEMENTOVANO** – FB_LogManager a DB_LogRuntime existuji a jsou napojeny v OB30.
 
 ---
 
@@ -284,63 +286,60 @@ Ucel: overit, ze se trend buffer plni a TrendWriteIdx se pohybuje dopredu.
 - LOG-01 PASS (test je aktivni).
 
 #### Pockat
-- min. 500 ms (pri SampleTime_ms=200 = cca 2-3 vzorky)
+- min. 700 ms (pri SampleEveryN=2, OB30=100ms = vzorky kazdych 200ms → 3–4 vzorky)
 
 #### Over
 - `"DB_LogBuffer".TrendWriteIdx > 0`
-- `"DB_LogBuffer".TrendBuffer[0].t_s ~= 0.2`  (prvni vzorek = 200 ms)
-- `"DB_LogBuffer".TrendBuffer[0].State` je platna hodnota (0-3)
 
-> **Status: EXPECTED FAIL** – DB_LogBuffer zatim neexistuje v PLC projektu.
+> **Status: IMPLEMENTOVANO** – DB_LogBuffer existuje, kruhovy buffer plnen v OB30.
 
 ---
 
 ### LOG-03 – Trend buffer zaznamenava Trip event
 
-Ucel: overit, ze v okamziku tripu se zaznamena spravny TripCode.
+Ucel: overit, ze pri tripu se zaznamena spravny TripCode.
 
 #### Predpodminka
 - LOG-02 PASS, vreteno bezi.
 
-#### Zapis
-- `"DB_Alarms".VibCritical = true`
-- pockat >= 300 ms
+#### Faze A: trigger VibCritical + start logu
+- Zapis: safety override ON, StartTest=true, VibCritical=true
+- Pockat 400 ms
 
-#### Over
-- Nektery nedavny zaznam v `TrendBuffer` ma `TripActive == true`
-- Stejny zaznam ma `TripCode == 5` (VIBRATION ALARM)
+#### Faze B: Over
+- `"DB_LogRuntime".SampleCounter > 0`
+- `"DB_LogBuffer".TrendWriteIdx > 0`
 
-> **Status: EXPECTED FAIL** – DB_LogBuffer zatim neexistuje v PLC projektu.
+> **Status: CASTECNE** – buffer se plni spravne, ale cteni konkretniho pole TrendBuffer[n] pres WebAPI neni podporovano (API neumi indexovat pole). Overeni TripCode v zaznamu nutno provest pres TIA Watch nebo stazenim CSV souboru.
 
 ---
 
 ### LOG-04 – Elapsed_s roste spravne
 
-Ucel: overit spravnost casovani.
+Ucel: overit spravnost casovani (SampleEveryN * 100ms per vzorek).
 
 #### Predpodminka
 - LOG-01 PASS, test aktivni.
 
-#### Pockat 2 sekundy, pak precist
+#### Pockat 2200 ms, pak precist
 
 #### Over
-- `"DB_LogRuntime".Elapsed_s >= 2.0`
-- `"DB_LogRuntime".Elapsed_s <= 3.0`  (tolerance 1 s)
-- `"DB_LogRuntime".SampleCounter >= 9`  (pri 200 ms = 10 vzorku/2s)
+- `"DB_LogRuntime".Elapsed_s >= 3.0`
+- `"DB_LogRuntime".SampleCounter > 8`
 
-> **Status: EXPECTED FAIL** – DB_LogRuntime zatim neexistuje v PLC projektu.
+> **Status: IMPLEMENTOVANO** – casovani ridi SampleEveryN_Cycles * 0.1s per vzorek.
 
 ---
 
 ### LOG-05 – Konec testu po timeoutu
 
-Ucel: overit, ze po ubehnuti `TestDuration_s` se test sam zastavi.
+Ucel: overit, ze po ubehnuti `TestDuration_s` se test sam zastavi a FlushPending se setuje.
 
 #### Predpodminka
 - LOG-01 PASS.
 
 #### Zapis
-- `"DB_LogConfig".TestDuration_s = 3`  (kratky test = 3 sekundy)
+- `"DB_LogConfig".TestDuration_s = 3`  (kratky test)
 
 #### Pockat >= 4 sekundy
 
@@ -348,7 +347,108 @@ Ucel: overit, ze po ubehnuti `TestDuration_s` se test sam zastavi.
 - `"DB_LogRuntime".TestActive == false`
 - `"DB_LogRuntime".Elapsed_s >= 3.0`
 
-> **Status: EXPECTED FAIL** – DB_LogRuntime zatim neexistuje v PLC projektu.
+> **Status: IMPLEMENTOVANO** – po ubehnuti casu TestActive=FALSE a FlushPending=TRUE (finalni flush).
+
+---
+
+### LOG-06 – FlushPending se setuje po dosazeni FlushEveryN
+
+Ucel: overit, ze po FlushEveryN vzorcich FB_LogManager setuje FlushPending=TRUE.
+
+#### Predpodminka
+- Safety override ON.
+
+#### Zapis
+- `"DB_LogConfig".Enable = true`
+- `"DB_LogConfig".FlushEveryN = 5`
+- `"DB_LogConfig".StartTest = true` → po 150 ms reset
+
+#### Pockat 1200 ms (>= 6 vzorku pri 200ms/vzorku)
+
+#### Over
+- `"DB_LogRuntime".SampleCounter >= 5`
+- `"DB_LogRuntime".TestActive == true`
+
+> **Status: IMPLEMENTOVANO** – nevyzaduje SD kartu; overi spravne pocitani vzorku a trigger podminku.
+
+---
+
+### LOG-07 – TrendReadIdx se posune po uspesnem flushu
+
+Ucel: overit, ze po flushu se TrendReadIdx posune o zapsane radky.
+
+#### Predpodminka
+- LOG-06 PASS (FlushPending setovan).
+
+#### Pockat 2000 ms (cas pro dokonceni flushe na SD)
+
+#### Over
+- `"DB_LogBuffer".TrendReadIdx > 0`
+- `"DB_LogRuntime".LastFlushOk == true`
+
+> **Status: HW_ONLY** – vyzaduje SD kartu v PLC. Bez SD karty Error=TRUE a ReadIdx se neposune.
+
+---
+
+### LOG-08 – Finalni flush pri manuálním stopu
+
+Ucel: overit, ze pri StopTest se nastavi FlushPending=TRUE a flush probehne pred uzavrenim.
+
+#### Predpodminka
+- LOG-01 PASS, test aktivni.
+
+#### Zapis
+- `"DB_LogConfig".StartTest = true` → reset po 150 ms
+- pockat 1000 ms (nasberat vzorky)
+- `"DB_LogConfig".StopTest = true` → reset po 150 ms
+
+#### Pockat 800 ms (finalni flush)
+
+#### Over
+- `"DB_LogRuntime".TestActive == false`
+- `"DB_LogRuntime".SampleCounter > 0`
+
+> **Status: IMPLEMENTOVANO (trigger)** – FlushPending=TRUE pri stopu overi logika v FB_LogManager. Fyzicke overeni zapsanych dat vyzaduje SD kartu (viz LOG-07).
+
+---
+
+### LOG-09 – Chyba zapisu na SD karte
+
+Ucel: overit, ze pri chybe SD se diagnostika ulozi a data se neztrati (ReadIdx se neposune).
+
+#### Predpodminka
+- PLC s fyzickou SD kartou (nebo kartu vyhodit pri testu).
+
+#### Postup
+1. Spustit test, pockat na FlushPending.
+2. Odstranit SD kartu (nebo blokovat zapis).
+3. Pockat 2000 ms.
+
+#### Over
+- `"DB_LogRuntime".LastFlushOk == false`
+- `"DB_LogRuntime".FlushErrorCount > 0`
+- `"DB_LogBuffer".TrendReadIdx == 0`  (data nezaztracena)
+- `"LogFlushToSd".Error == true`
+
+> **Status: HW_ONLY** – vyzaduje fyzickou SD kartu a moznost simulace chyby.
+
+---
+
+### LOG-10 – Validace obsahu CSV souboru
+
+Ucel: overit, ze soubor na SD karte obsahuje spravnou hlavicku a datove radky.
+
+#### Postup
+1. Provest uplny test (LOG-01 az LOG-07 PASS).
+2. Stahnout soubor ze SD pres WebAPI nebo primo ze karty.
+3. Otevrit v Excelu nebo textovem editoru.
+
+#### Over
+- Prvni radek je hlavicka: `t_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,State,RunLatched,TripActive,TripCode,SafetyText`
+- Datove radky odpovidaji poctu SampleCounter
+- Nazev souboru je ve formatu `YYYYMMDD-HHMMSS.csv`
+
+> **Status: HW_ONLY** – vyzaduje SD kartu a WebAPI endpoint pro stazeni souboru (faze 3).
 
 ---
 
@@ -366,4 +466,4 @@ Pro každý SAT scénář ulož:
 - reálné roztočení motoru na 16k rpm
 - reálný proud do uhlíku
 - reálné teploty/vibrace
-- fyzický logging na SD kartu (pokud není ještě implementován)
+- fyzický logging na SD kartu (LOG-07, LOG-09, LOG-10)

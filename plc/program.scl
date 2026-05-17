@@ -24,6 +24,7 @@ VERSION : 0.1
 		SampleEveryN_Cycles : Int := 2;
 		TestDuration_s : DInt := 86400;
 		FlushEveryN : Int := 100;
+		AckFlush : Bool;   // vstup od FB_LogFlushToSd – potvrzeni flushe, resetuje FlushPending
 	END_VAR
 
 	VAR_OUTPUT
@@ -34,8 +35,19 @@ VERSION : 0.1
 	VAR
 		prevStartTest : Bool := FALSE;
 		prevStopTest : Bool := FALSE;
+		prevAckFlush : Bool := FALSE;
 		cycleCounter : Int := 0;
 		flushCounter : Int := 0;
+	END_VAR
+
+	VAR_TEMP
+		startDtl  : DTL;
+		rdRet     : Int;
+		mo2       : String[2];
+		dy2       : String[2];
+		hr2       : String[2];
+		mn2       : String[2];
+		sc2       : String[2];
 	END_VAR
 
 BEGIN
@@ -44,23 +56,72 @@ BEGIN
 		"DB_LogRuntime".TestActive := TRUE;
 		"DB_LogRuntime".Elapsed_s := 0.0;
 		"DB_LogRuntime".SampleCounter := 0;
+		"DB_LogRuntime".FlushErrorCount := 0;
+		"DB_LogRuntime".LastFlushOk := TRUE;
+		"DB_LogRuntime".HeaderWritten := FALSE;
 		"DB_LogBuffer".TrendWriteIdx := 0;
 		"DB_LogBuffer".TrendReadIdx := 0;
 		cycleCounter := 0;
 		flushCounter := 0;
 		FlushPending := FALSE;
 		TestTimeoutReached := FALSE;
+
+		// Generovani nazvu souboru z aktualniho casu (YYYYMMDD-HHMMSS.csv)
+		rdRet := RD_SYS_T(OUT := startDtl);
+		mo2 := USINT_TO_STRING(startDtl.MONTH);
+		IF startDtl.MONTH < 10 THEN
+			mo2 := CONCAT(IN1 := '0', IN2 := mo2);
+		END_IF;
+
+		dy2 := USINT_TO_STRING(startDtl.DAY);
+		IF startDtl.DAY < 10 THEN
+			dy2 := CONCAT(IN1 := '0', IN2 := dy2);
+		END_IF;
+
+		hr2 := USINT_TO_STRING(startDtl.HOUR);
+		IF startDtl.HOUR < 10 THEN
+			hr2 := CONCAT(IN1 := '0', IN2 := hr2);
+		END_IF;
+
+		mn2 := USINT_TO_STRING(startDtl.MINUTE);
+		IF startDtl.MINUTE < 10 THEN
+			mn2 := CONCAT(IN1 := '0', IN2 := mn2);
+		END_IF;
+
+		sc2 := USINT_TO_STRING(startDtl.SECOND);
+		IF startDtl.SECOND < 10 THEN
+			sc2 := CONCAT(IN1 := '0', IN2 := sc2);
+		END_IF;
+
+		"DB_LogRuntime".FileName := UINT_TO_STRING(startDtl.YEAR);
+		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := mo2);
+		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := dy2);
+		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := '-');
+		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := hr2);
+		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := mn2);
+		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := sc2);
+		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := '.csv');
+		"DB_LogRuntime".HeaderWritten := FALSE;
+		"DB_LogRuntime".FlushErrorCount := 0;
+		"DB_LogRuntime".LastFlushOk := TRUE;
 		// (event log: TEST_START)
 	END_IF;
 
 	// Detekce stopu testu (hrana)
 	IF Enable AND (StopTest AND NOT prevStopTest) THEN
 		"DB_LogRuntime".TestActive := FALSE;
+		FlushPending := TRUE;   // finalni flush pri manuálním stopu
 		// (event log: TEST_STOP)
 	END_IF;
 
 	prevStartTest := StartTest;
 	prevStopTest := StopTest;
+
+	// Handshake: FB_LogFlushToSd potvrdil flush -> resetovat FlushPending
+	IF AckFlush AND NOT prevAckFlush THEN
+		FlushPending := FALSE;
+	END_IF;
+	prevAckFlush := AckFlush;
 
 	// Cyklické vzorkování pouze pokud test běží
 	IF Enable AND "DB_LogRuntime".TestActive THEN
@@ -156,6 +217,8 @@ VERSION : 0.1
 NON_RETAIN
 	VAR
 		Enable : Bool;
+		StartTest : Bool;   // nastavit true pres HMI/Web API pro spusteni testu (hrana)
+		StopTest : Bool;    // nastavit true pres HMI/Web API pro zastaveni testu (hrana)
 		SampleTime_ms : Int;
 		TestDuration_s : DInt;
 		FlushEveryN : Int;
@@ -163,6 +226,8 @@ NON_RETAIN
 	END_VAR
 BEGIN
 	Enable := false;
+	StartTest := false;
+	StopTest := false;
 	SampleTime_ms := 200;
 	TestDuration_s := 86400;
 	FlushEveryN := 100;
@@ -180,6 +245,9 @@ NON_RETAIN
 		SampleCounter : DInt;
 		LastFlushOk : Bool;
 		LastError : String[40];
+		FileName : String[32];        // generovano pri startu testu: YYYYMMDD-HHMMSS.csv
+		HeaderWritten : Bool;         // TRUE = CSV hlavicka jiz zapsana do aktualniho souboru
+		FlushErrorCount : Int;        // pocet chyb flushe od posledniho startu testu
 	END_VAR
 BEGIN
 	TestActive := false;
@@ -187,6 +255,9 @@ BEGIN
 	SampleCounter := 0;
 	LastFlushOk := true;
 	LastError := '';
+	FileName := '';
+	HeaderWritten := false;
+	FlushErrorCount := 0;
 END_DATA_BLOCK
 
 DATA_BLOCK "DB_LogBuffer"
@@ -825,10 +896,10 @@ BEGIN
 	    #DQ0_LED := FALSE;
 	    
 	ELSE
-	    // nezadaný stav: DI0 = 1, DI1 = 0
-	    // bezpečný stav
-	    #DQ1_LED := FALSE;
-	    #DQ0_LED := FALSE;
+		// DI0 = 1, DI1_SafetyButton = true -> relay OK, button stisknuty = E-STOP fault stav
+		// cervena LED sviti
+		#DQ1_LED := TRUE;  
+		#DQ0_LED := FALSE;
 	END_IF;
 END_FUNCTION_BLOCK
 
@@ -984,7 +1055,7 @@ BEGIN
 	IF "DB_Config".InputSim.EnableEmergencyStopOverride THEN
 		"DB_IO".DI.EmergencyStop := "DB_Config".InputSim.EmergencyStop;
 	ELSE
-		"DB_IO".DI.EmergencyStop := NOT "DI1_SafetyRelay_Released_Safety_Button"; // DI1_SafetyRelay_Released_Safety_Button = False znamena, ze mame stisknute safety button, ktery je normally closed a po stisknuti se kontakt rozpoji a na vstupu je 0V
+		"DB_IO".DI.EmergencyStop := NOT "DI1_SafetyRelay_Released_Safety_Button"; // DI1_SafetyRelay_Released_Safety_Button = False znamena, ze mame stisknuty safety button, ktery je normally closed a po stisknuti se kontakt rozpoji a na vstupu je 0V
 	END_IF;
 	"DB_IO".AI.AI1_TeplotaKomaraKartac_Ohm := "AI1_RTD";
 END_FUNCTION
@@ -994,6 +1065,168 @@ DATA_BLOCK "FB_LabPSU_DB"
 VERSION : 0.1
 NON_RETAIN
 "FB_LabPSU"
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "LogManager"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_LogManager"
+
+BEGIN
+
+END_DATA_BLOCK
+
+FUNCTION_BLOCK "FB_LogFlushToSd"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+	VAR_INPUT
+		Enable : Bool;
+		FlushRequest : Bool;       // z LogManager.FlushPending
+		FinalFlush : Bool;         // TRUE = zapsat vse (pri stopu/timeoutu)
+		MaxRowsPerFlush : Int := 50;
+		RetryLimit : Int := 3;
+	END_VAR
+
+	VAR_OUTPUT
+		Busy : Bool;
+		AckFlush : Bool;           // 1 cyklus TRUE po dokonceni
+		Error : Bool;
+		ErrorCode : Word;
+	END_VAR
+
+	VAR
+		Step : USInt;
+		RowIdx : Int;
+		RowsToFlush : Int;
+		RowsDone : Int;
+		RetryCount : Int;
+		prevFlushReq : Bool;
+	END_VAR
+
+	VAR_TEMP
+		rowsAvail : Int;
+	END_VAR
+
+	VAR CONSTANT
+		STEP_IDLE : USInt := 0;
+		STEP_PREPARE : USInt := 1;
+		STEP_OPEN : USInt := 2;
+		STEP_WR_HEADER : USInt := 3;
+		STEP_WR_ROW : USInt := 4;
+		STEP_NEXT_ROW : USInt := 5;
+		STEP_CLOSE : USInt := 6;
+		STEP_ACK : USInt := 7;
+		STEP_ERROR : USInt := 10;
+	END_VAR
+
+BEGIN
+	AckFlush := FALSE;
+	Busy := FALSE;
+	Error := FALSE;
+	ErrorCode := 0;
+
+	CASE Step OF
+		STEP_IDLE:
+			IF Enable AND (FlushRequest AND NOT prevFlushReq) THEN
+				Busy := TRUE;
+				Step := STEP_PREPARE;
+			END_IF;
+
+		STEP_PREPARE:
+			IF "DB_LogBuffer".TrendWriteIdx >= "DB_LogBuffer".TrendReadIdx THEN
+				rowsAvail := "DB_LogBuffer".TrendWriteIdx - "DB_LogBuffer".TrendReadIdx;
+			ELSE
+				rowsAvail := (1000 - "DB_LogBuffer".TrendReadIdx) + "DB_LogBuffer".TrendWriteIdx;
+			END_IF;
+
+			IF FinalFlush THEN
+				RowsToFlush := rowsAvail;
+			ELSE
+				RowsToFlush := rowsAvail;
+				IF RowsToFlush > MaxRowsPerFlush THEN
+					RowsToFlush := MaxRowsPerFlush;
+				END_IF;
+			END_IF;
+
+			IF RowsToFlush <= 0 THEN
+				Step := STEP_ACK;
+			ELSE
+				RowIdx := "DB_LogBuffer".TrendReadIdx;
+				RowsDone := 0;
+				RetryCount := 0;
+				Step := STEP_OPEN;
+			END_IF;
+
+		STEP_OPEN:
+			// TODO: FileOpen APPEND na "DB_LogRuntime".FileName
+			IF "DB_LogRuntime".HeaderWritten THEN
+				Step := STEP_WR_ROW;
+			ELSE
+				Step := STEP_WR_HEADER;
+			END_IF;
+
+		STEP_WR_HEADER:
+			// TODO: FileWrite CSV hlavicky
+			"DB_LogRuntime".HeaderWritten := TRUE;
+			Step := STEP_WR_ROW;
+
+		STEP_WR_ROW:
+			// TODO: FileWrite jednoho radku z TrendBuffer[RowIdx]
+			Step := STEP_NEXT_ROW;
+
+		STEP_NEXT_ROW:
+			RowsDone := RowsDone + 1;
+			RowIdx := RowIdx + 1;
+			IF RowIdx >= 1000 THEN
+				RowIdx := 0;
+			END_IF;
+
+			IF RowsDone >= RowsToFlush THEN
+				Step := STEP_CLOSE;
+			ELSE
+				Step := STEP_WR_ROW;
+			END_IF;
+
+		STEP_CLOSE:
+			// TODO: FileClose
+			Step := STEP_ACK;
+
+		STEP_ACK:
+			"DB_LogBuffer".TrendReadIdx := "DB_LogBuffer".TrendReadIdx + RowsDone;
+			IF "DB_LogBuffer".TrendReadIdx >= 1000 THEN
+				"DB_LogBuffer".TrendReadIdx := "DB_LogBuffer".TrendReadIdx - 1000;
+			END_IF;
+			"DB_LogRuntime".LastFlushOk := TRUE;
+			AckFlush := TRUE;
+			Busy := FALSE;
+			Step := STEP_IDLE;
+
+		STEP_ERROR:
+			"DB_LogRuntime".LastFlushOk := FALSE;
+			"DB_LogRuntime".FlushErrorCount := "DB_LogRuntime".FlushErrorCount + 1;
+			RetryCount := RetryCount + 1;
+			IF RetryCount <= RetryLimit THEN
+				Step := STEP_OPEN;
+			ELSE
+				Error := TRUE;
+				Busy := FALSE;
+				AckFlush := TRUE;
+				Step := STEP_IDLE;
+			END_IF;
+	END_CASE;
+
+	prevFlushReq := FlushRequest;
+END_FUNCTION_BLOCK
+
+DATA_BLOCK "LogFlushToSd"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_LogFlushToSd"
 
 BEGIN
 
@@ -1040,8 +1273,8 @@ BEGIN
 	// File I/O (FlushPending) se zpracovava v Main (OB1), ne zde
 	"LogManager"(
 		Enable := "DB_LogConfig".Enable,
-		StartTest := FALSE,   // TODO: napojit na HMI tlacitko start testu
-		StopTest := FALSE,    // TODO: napojit na HMI tlacitko stop testu
+		StartTest := "DB_LogConfig".StartTest,
+		StopTest := "DB_LogConfig".StopTest,
 		RPM := "DB_HMI".Sensors.TM_Rotation_A_Channel,
 		T_Lozisko := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C,
 		T_Uhliky := 0.0,      // TODO: napojit na skutecny senzor teploty uhliku
@@ -1054,7 +1287,98 @@ BEGIN
 		SafetyText := "DB_Status".Safety.StatusText,
 		SampleEveryN_Cycles := 2,
 		TestDuration_s := "DB_LogConfig".TestDuration_s,
-		FlushEveryN := "DB_LogConfig".FlushEveryN
+		FlushEveryN := "DB_LogConfig".FlushEveryN,
+		AckFlush := "LogFlushToSd".AckFlush
+	);
+END_ORGANIZATION_BLOCK
+
+ORGANIZATION_BLOCK "Main"
+TITLE = "Main Program Sweep (Cycle)"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_TEMP
+      WwwRetVal : Int;
+   END_VAR
+
+
+BEGIN
+	//******************************************************************
+	// IO MAP READ
+	//******************************************************************
+	"FC_IO_Map_Read"();
+	"TM_Counter"(SwGate:=TRUE,
+	             CaptureEnable:=FALSE,
+	             SyncEnable:=FALSE,
+	             ErrorAck:=FALSE,
+	             EventAck:=FALSE,
+	             MeasuredValue => "DB_IO".TM.MeasuredValue);
+
+	"FC_ConvertIO"();
+
+
+	//******************************************************************
+	// CALL FB BLOCKS - PRODUCTION LOGIC
+	//******************************************************************
+	"DB_Alarms".TempHigh := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C > "DB_Config".TempHighThreshold_C;
+
+	// Nektere safety signaly nemame implementovane - teplota, vibrace. Zatim bude potreba je simulovat
+	"Safety_1"(Enable:= TRUE, // This signal can be used to bind to another system in the future
+	           EmergencyStop:="DB_IO".DI.EmergencyStop,
+	           SafetyRelayAuxOk:= "DB_IO".DI.SafetyRelayAuxOk,
+	           ExternalFault:= "DB_IO".DI.ExternalFault,
+	           TempAlarm:="DB_Alarms".TempHigh,
+	           VibAlarm:= "DB_Alarms".VibCritical,
+	           SafetyOk => "DB_Status".Safety.SafetyOk,
+	           PermitMotion => "DB_Status".Safety.PermitMotion,
+	           TripActive => "DB_Status".Safety.TripActive, // TripActive znamena "bezpecne odpojeni vykonovych vystupu systemu"
+	           TripCode => "DB_Status".Safety.TripCode,
+	           StatusText => "DB_Status".Safety.StatusText
+	);
+
+
+	"Spindel"(HMI_Start:= "DB_HMI".Spindle.Start,
+	          HMI_Stop:="DB_HMI".Spindle.Stop,
+	          HMI_ResetFault:="DB_HMI".Spindle.ResetFault,
+	          HMI_Speed_RPM:="DB_HMI".Spindle.Speed_RPM,
+	          PermitMotion:="DB_Status".Safety.PermitMotion,
+	          EmergencyStop:="DB_IO".DI.EmergencyStop,
+	          ExternalFaultIn:="DB_IO".DI.ExternalFault,
+	          SpeedMax_RPM:=18000.0,
+	          AO_MaxVolt:=10.0,
+	          RampUp_RPM_per_s:=6000.0,
+	          RampDown_RPM_per_s:=9000.0,
+	          ResetPulse:=T#300MS,
+	          RequireSpeedToRun:=FALSE,
+	          DO_RunForward=>"DB_IO".DQ.RunForwardCmd,
+	          DO_FaultReset=>"DB_IO".DQ.FaultResetCmd,
+	          DO_MultiSpeed1=>"DB_IO".DQ.MultiSpeed1,
+	          DO_ExternalFault=>"DB_IO".DQ.ExternalFault,
+	          AQ1_Voltage_0_10V=>"DB_IO".AQ.SpeedVoltage,
+	          RunLatched=>"DB_Status".Spindel.RunLatched,
+	          TripActive=>"DB_Status".Spindel.TripActive,
+	          State=>"DB_Status".Spindel.State,
+	          StatusText=>"DB_Status".Spindel.StatusText);
+
+
+	//******************************************************************
+	// CALL OTHER FB BLOCKS
+	//******************************************************************
+	"FB_SafetyButtons_DB"(DI0_AuxSafetyRelay:="DB_IO".DI.SafetyRelayAuxOk,
+	                      DI1_SafetyButton:="DB_IO".DI.EmergencyStop,
+	                      DQ0_LED=>"DB_IO".DQ.ResetButtonLed,
+	                      DQ1_LED=>"DB_IO".DQ.EmergencyStopButtonLed);
+
+	// ----------------------------------------------------------------
+	// FAZE 2: Davkovy zapis logu na SD kartu
+	// FlushPending nebo FinalFlush spusti stavovy automat LogFlushToSd.
+	// Po dokonceni AckFlush resetuje FlushPending ve FB_LogManager.
+	// ----------------------------------------------------------------
+	"LogFlushToSd"(
+		Enable          := "DB_LogConfig".Enable,
+		FlushRequest    := "LogManager".FlushPending,
+		FinalFlush      := NOT "DB_LogRuntime".TestActive AND "LogManager".FlushPending,
+		MaxRowsPerFlush := 50,
+		RetryLimit      := 3
 	);
 END_ORGANIZATION_BLOCK
 

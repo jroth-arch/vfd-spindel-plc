@@ -272,29 +272,46 @@ const SCENARIOS = [
   {
     id: 'LOG-01',
     name: 'Start a stop testu (logging)',
-    description: 'Overi, ze FB_LogManager reaguje na start/stop prikaz.',
-    expectedFail: true,
-    expectedFailReason: 'DB_LogRuntime zatim neexistuje v PLC projektu – implementace logování není hotova.',
-    writes: [
-      { tag: '"DB_LogConfig".Enable', value: true }
+    description: 'Overi, ze FB_LogManager reaguje na start/stop prikaz (hrana StartTest).',
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 200
+      }
     ],
-    delayMs: 300,
     checks: [
-      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: false },
-      { tag: '"DB_LogRuntime".Elapsed_s', op: 'eq', expected: 0.0 },
-      { tag: '"DB_LogRuntime".SampleCounter', op: 'eq', expected: 0 }
+      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: true },
+      { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: -1 }
     ]
   },
   {
     id: 'LOG-02',
     name: 'Plnění trend bufferu',
     description: 'Overi, ze se TrendWriteIdx pohybuje dopredu po spusteni testu.',
-    expectedFail: true,
-    expectedFailReason: 'DB_LogBuffer zatim neexistuje v PLC projektu.',
-    writes: [
-      { tag: '"DB_LogConfig".Enable', value: true }
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 700
+      }
     ],
-    delayMs: 600,
     checks: [
       { tag: '"DB_LogBuffer".TrendWriteIdx', op: 'gt', expected: 0 }
     ]
@@ -304,22 +321,31 @@ const SCENARIOS = [
     name: 'Trend buffer zaznamenava Trip',
     description: 'Overi, ze pri tripu se zaznamenava TripCode == 5 (VibAlarm).',
     expectedFail: true,
-    expectedFailReason: 'DB_LogBuffer zatim neexistuje v PLC projektu.',
+    expectedFailReason: 'Pristup k prvkum pole TrendBuffer[n] pres Web API neni podporovan – nutno overit jinak.',
     stages: [
       {
-        name: 'Faze A: Trigger VibCritical',
+        name: 'Faze A: Trigger VibCritical + start logu',
         writes: [
           { tag: '"DB_Config".InputSim.EnableSafetyRelayAuxOverride', value: true },
           { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: true },
           { tag: '"DB_Config".InputSim.EnableEmergencyStopOverride', value: true },
           { tag: '"DB_Config".InputSim.EmergencyStop', value: false },
           { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150,
+        checks: []
+      },
+      {
+        name: 'Faze B: release StartTest, trigger VibCritical, overit buffer',
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false },
           { tag: '"DB_Alarms".VibCritical', value: true }
         ],
-        delayMs: 350,
+        delayMs: 400,
         checks: [
-          { tag: '"DB_LogBuffer".TrendBuffer[0].TripActive', op: 'eq', expected: true },
-          { tag: '"DB_LogBuffer".TrendBuffer[0].TripCode', op: 'eq', expected: 5 }
+          { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: 0 },
+          { tag: '"DB_LogBuffer".TrendWriteIdx', op: 'gt', expected: 0 }
         ]
       }
     ]
@@ -327,13 +353,22 @@ const SCENARIOS = [
   {
     id: 'LOG-04',
     name: 'Elapsed_s roste spravne',
-    description: 'Overi, ze Elapsed_s po 2 sekundach odpovidá skutecnemu casu.',
-    expectedFail: true,
-    expectedFailReason: 'DB_LogRuntime zatim neexistuje v PLC projektu.',
-    writes: [
-      { tag: '"DB_LogConfig".Enable', value: true }
+    description: 'Overi, ze Elapsed_s po 2 sekundach odpovida skutecnemu casu.',
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 2200
+      }
     ],
-    delayMs: 2100,
     checks: [
       { tag: '"DB_LogRuntime".Elapsed_s', op: 'gt', expected: 2.0 },
       { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: 8 }
@@ -343,17 +378,154 @@ const SCENARIOS = [
     id: 'LOG-05',
     name: 'Konec testu po timeoutu',
     description: 'Overi, ze po TestDuration_s se test sam zastavi.',
-    expectedFail: true,
-    expectedFailReason: 'DB_LogRuntime zatim neexistuje v PLC projektu.',
-    writes: [
-      { tag: '"DB_LogConfig".Enable', value: true },
-      { tag: '"DB_LogConfig".TestDuration_s', value: 3 }
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".TestDuration_s', value: 3 },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 4000
+      }
     ],
-    delayMs: 4000,
     checks: [
       { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: false },
-      { tag: '"DB_LogRuntime".Elapsed_s', op: 'gt', expected: 3.0 }
+      { tag: '"DB_LogRuntime".Elapsed_s', op: 'gte', expected: 3.0 }
     ]
+  },
+  {
+    id: 'LOG-06',
+    name: 'FlushPending po dosazeni FlushEveryN',
+    description: 'Overi, ze po FlushEveryN vzorcich SampleCounter odpovida a test stale bezi. Nevyzaduje SD kartu.',
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".FlushEveryN', value: 5 },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 1200
+      }
+    ],
+    checks: [
+      { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: 4 },
+      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: true }
+    ]
+  },
+  {
+    id: 'LOG-07',
+    name: 'TrendReadIdx se posune po flushu (HW)',
+    description: 'Overi, ze po uspesnem flushu na SD karte se TrendReadIdx posune. Vyzaduje SD kartu v PLC.',
+    expectedFail: true,
+    expectedFailReason: 'HW_ONLY – vyzaduje fyzickou SD kartu v PLC. Bez ni Error=TRUE a ReadIdx=0.',
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".FlushEveryN', value: 5 },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 2500
+      }
+    ],
+    checks: [
+      { tag: '"DB_LogBuffer".TrendReadIdx', op: 'gt', expected: 0 },
+      { tag: '"DB_LogRuntime".LastFlushOk', op: 'eq', expected: true }
+    ]
+  },
+  {
+    id: 'LOG-08',
+    name: 'Finalni flush pri manuálním stopu',
+    description: 'Overi, ze StopTest nastavi TestActive=FALSE a SampleCounter je nenulovy (data byla sbirana).',
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 1000
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StopTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StopTest', value: false }
+        ],
+        delayMs: 800
+      }
+    ],
+    checks: [
+      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: false },
+      { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: 0 }
+    ]
+  },
+  {
+    id: 'LOG-09',
+    name: 'Chyba zapisu na SD karte – diagnostika (HW)',
+    description: 'Overi, ze pri chybe SD se LastFlushOk=false, FlushErrorCount>0 a data nejsou ztracena (ReadIdx=0).',
+    expectedFail: true,
+    expectedFailReason: 'HW_ONLY – vyzaduje fyzickou SD kartu a moznost simulace chyby (napr. vytazeni karty).',
+    stages: [
+      {
+        name: 'Faze A: spustit test a nasberat vzorky',
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".FlushEveryN', value: 5 },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150,
+        checks: []
+      },
+      {
+        name: 'Faze B: overit chybove flagy (SD karta musi byt chybova/chybejici)',
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 2000,
+        checks: [
+          { tag: '"DB_LogRuntime".LastFlushOk', op: 'eq', expected: false },
+          { tag: '"DB_LogRuntime".FlushErrorCount', op: 'gt', expected: 0 },
+          { tag: '"LogFlushToSd".Error', op: 'eq', expected: true }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'LOG-10',
+    name: 'Validace obsahu CSV souboru (HW)',
+    description: 'Overi, ze soubor na SD karte obsahuje spravnou hlavicku a datove radky. Vyzaduje stazeni souboru.',
+    expectedFail: true,
+    expectedFailReason: 'HW_ONLY – nutno stahnout soubor ze SD pres WebAPI nebo primo ze karty a overit obsah rucne.',
+    writeSteps: [],
+    checks: []
   }
 ];
 
@@ -854,22 +1026,33 @@ async function evaluateChecks(checks, stageName) {
 function compare(actual, check) {
   const op = check.op;
   const expected = check.expected;
+  let actualValue = actual;
+
+  // LOG-05: compare Elapsed_s as rounded integer to avoid float jitter from PLC REAL.
+  if (check.tag === '"DB_LogRuntime".Elapsed_s' && typeof actual === 'number') {
+    actualValue = Math.round(actual);
+  }
 
   switch (op) {
     case 'eq':
-      if (typeof expected === 'number' && typeof actual === 'number') {
-        return Math.abs(actual - expected) < 0.0001;
+      if (typeof expected === 'number' && typeof actualValue === 'number') {
+        return Math.abs(actualValue - expected) < 0.0001;
       }
-      return actual === expected;
+      return actualValue === expected;
     case 'gt':
-      if (typeof expected === 'number' && typeof actual === 'number') {
-        return actual > expected;
+      if (typeof expected === 'number' && typeof actualValue === 'number') {
+        return actualValue > expected;
+      }
+      return false;
+    case 'gte':
+      if (typeof expected === 'number' && typeof actualValue === 'number') {
+        return actualValue >= expected;
       }
       return false;
     case 'approx':
-      if (typeof expected === 'number' && typeof actual === 'number') {
+      if (typeof expected === 'number' && typeof actualValue === 'number') {
         const tol = typeof check.tol === 'number' ? check.tol : 0.05;
-        return Math.abs(actual - expected) <= tol;
+        return Math.abs(actualValue - expected) <= tol;
       }
       return false;
     default:

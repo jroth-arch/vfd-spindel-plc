@@ -526,6 +526,114 @@ const SCENARIOS = [
     expectedFailReason: 'HW_ONLY – nutno stahnout soubor ze SD pres WebAPI nebo primo ze karty a overit obsah rucne.',
     writeSteps: [],
     checks: []
+  },
+  {
+    id: 'LOG-11',
+    name: 'One-click E2E logging + flush (HW)',
+    description: 'Kompletni overeni logovani: start testu, sber vzorku, stop, final flush a kontrola runtime flagu. Vyzaduje SD kartu v PLC.',
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".TestDuration_s', value: 15 },
+          { tag: '"DB_LogConfig".FlushEveryN', value: 5 },
+          { tag: '"DB_HMI".Spindle.Speed_RPM', value: 12000.0 },
+          { tag: '"DB_HMI".LabPSU.Enable', value: true },
+          { tag: '"DB_HMI".LabPSU.Mode', value: 1 },
+          { tag: '"DB_HMI".LabPSU.ConstCurrent_A', value: 5.0 },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 3000
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StopTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_LogConfig".StopTest', value: false }
+        ],
+        delayMs: 2000
+      }
+    ],
+    checks: [
+      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: false },
+      { tag: '"DB_LogRuntime".Elapsed_s', op: 'gt', expected: 1.0 },
+      { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: 0 },
+      { tag: '"DB_LogRuntime".HeaderWritten', op: 'eq', expected: true },
+      { tag: '"DB_LogRuntime".FlushErrorCount', op: 'eq', expected: 0 },
+      { tag: '"DB_LogRuntime".LastFlushOk', op: 'eq', expected: true },
+      { tag: '"DB_LogBuffer".TrendReadIdx', op: 'gt', expected: 0 }
+    ]
+  },
+  {
+    id: 'LOG-12',
+    name: 'Spindle rotation + logging (HW)',
+    description: 'Roztoci vreteno na 16000 RPM, spusti logovani, necha bezet 5 sekund, zastavi vse a overi zapis na SD kartu.',
+    writeSteps: [
+      {
+        writes: [
+          { tag: '"DB_Config".InputSim.EnableSafetyRelayAuxOverride', value: true },
+          { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: true },
+          { tag: '"DB_Config".InputSim.EnableEmergencyStopOverride', value: true },
+          { tag: '"DB_Config".InputSim.EmergencyStop', value: false },
+          { tag: '"DB_LogConfig".Enable', value: true },
+          { tag: '"DB_LogConfig".TestDuration_s', value: 30 },
+          { tag: '"DB_LogConfig".FlushEveryN', value: 10 },
+          { tag: '"DB_HMI".Spindle.Speed_RPM', value: 16000.0 },
+          { tag: '"DB_HMI".LabPSU.Enable', value: true },
+          { tag: '"DB_HMI".LabPSU.Mode', value: 1 },
+          { tag: '"DB_HMI".LabPSU.ConstCurrent_A', value: 5.0 }
+        ],
+        delayMs: 200
+      },
+      {
+        writes: [
+          { tag: '"DB_HMI".Spindle.Start', value: true },
+          { tag: '"DB_LogConfig".StartTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_HMI".Spindle.Start', value: false },
+          { tag: '"DB_LogConfig".StartTest', value: false }
+        ],
+        delayMs: 5000
+      },
+      {
+        writes: [
+          { tag: '"DB_HMI".Spindle.Stop', value: true },
+          { tag: '"DB_LogConfig".StopTest', value: true }
+        ],
+        delayMs: 150
+      },
+      {
+        writes: [
+          { tag: '"DB_HMI".Spindle.Stop', value: false },
+          { tag: '"DB_LogConfig".StopTest', value: false }
+        ],
+        delayMs: 2000
+      }
+    ],
+    checks: [
+      { tag: '"DB_LogRuntime".TestActive', op: 'eq', expected: false },
+      { tag: '"DB_LogRuntime".Elapsed_s', op: 'gt', expected: 3.0 },
+      { tag: '"DB_LogRuntime".SampleCounter', op: 'gt', expected: 10 },
+      { tag: '"DB_LogRuntime".HeaderWritten', op: 'eq', expected: true },
+      { tag: '"DB_LogRuntime".FlushErrorCount', op: 'eq', expected: 0 },
+      { tag: '"DB_LogRuntime".LastFlushOk', op: 'eq', expected: true },
+      { tag: '"DB_LogBuffer".TrendReadIdx', op: 'gt', expected: 0 },
+      { tag: '"DB_Status".Spindel.State', op: 'eq', expected: 0 }
+    ]
   }
 ];
 

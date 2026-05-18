@@ -43,11 +43,9 @@ VERSION : 0.1
 	VAR_TEMP
 		startDtl  : DTL;
 		rdRet     : Int;
-		mo2       : String[2];
-		dy2       : String[2];
-		hr2       : String[2];
-		mn2       : String[2];
-		sc2       : String[2];
+		yr2       : UInt;
+		fName     : String[32];
+		digit     : USInt;
 	END_VAR
 
 BEGIN
@@ -66,41 +64,54 @@ BEGIN
 		FlushPending := FALSE;
 		TestTimeoutReached := FALSE;
 
-		// Generovani nazvu souboru z aktualniho casu (YYYYMMDD-HHMMSS.csv)
+		// Generate timestamp-based file name using direct digit manipulation
 		rdRet := RD_SYS_T(OUT := startDtl);
-		mo2 := USINT_TO_STRING(startDtl.MONTH);
-		IF startDtl.MONTH < 10 THEN
-			mo2 := CONCAT(IN1 := '0', IN2 := mo2);
-		END_IF;
-
-		dy2 := USINT_TO_STRING(startDtl.DAY);
-		IF startDtl.DAY < 10 THEN
-			dy2 := CONCAT(IN1 := '0', IN2 := dy2);
-		END_IF;
-
-		hr2 := USINT_TO_STRING(startDtl.HOUR);
-		IF startDtl.HOUR < 10 THEN
-			hr2 := CONCAT(IN1 := '0', IN2 := hr2);
-		END_IF;
-
-		mn2 := USINT_TO_STRING(startDtl.MINUTE);
-		IF startDtl.MINUTE < 10 THEN
-			mn2 := CONCAT(IN1 := '0', IN2 := mn2);
-		END_IF;
-
-		sc2 := USINT_TO_STRING(startDtl.SECOND);
-		IF startDtl.SECOND < 10 THEN
-			sc2 := CONCAT(IN1 := '0', IN2 := sc2);
-		END_IF;
-
-		"DB_LogRuntime".FileName := UINT_TO_STRING(startDtl.YEAR);
-		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := mo2);
-		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := dy2);
-		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := '-');
-		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := hr2);
-		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := mn2);
-		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := sc2);
-		"DB_LogRuntime".FileName := CONCAT(IN1 := "DB_LogRuntime".FileName, IN2 := '.csv');
+		
+		// Build filename: LOG_YYMMDD_HHMMSS.csv
+		fName := 'LOG_';
+		
+		// Year (last 2 digits)
+		yr2 := startDtl.YEAR MOD 100;
+		digit := UINT_TO_USINT(yr2 / 10);
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		digit := UINT_TO_USINT(yr2 MOD 10);
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		
+		// Month
+		digit := startDtl.MONTH / 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		digit := startDtl.MONTH MOD 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		
+		// Day
+		digit := startDtl.DAY / 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		digit := startDtl.DAY MOD 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		
+		fName := CONCAT(IN1 := fName, IN2 := '_');
+		
+		// Hour
+		digit := startDtl.HOUR / 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		digit := startDtl.HOUR MOD 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		
+		// Minute
+		digit := startDtl.MINUTE / 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		digit := startDtl.MINUTE MOD 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		
+		// Second
+		digit := startDtl.SECOND / 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		digit := startDtl.SECOND MOD 10;
+		fName := CONCAT(IN1 := fName, IN2 := BYTE_TO_CHAR(48 + digit));
+		
+		fName := CONCAT(IN1 := fName, IN2 := '.csv');
+		
+		"DB_LogRuntime".FileName := fName;
 		"DB_LogRuntime".HeaderWritten := FALSE;
 		"DB_LogRuntime".FlushErrorCount := 0;
 		"DB_LogRuntime".LastFlushOk := TRUE;
@@ -210,6 +221,54 @@ VERSION : 0.1
 		SafetyText : String[40];
 	END_STRUCT;
 END_TYPE
+
+FUNCTION "FC_LogRecordToCsv" : String[254]
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+	VAR_INPUT
+		Rec : "UDT_LogRecord";
+	END_VAR
+
+	VAR_TEMP
+		line : String[254];
+	END_VAR
+
+BEGIN
+	line := REAL_TO_STRING(Rec.t_s);
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.RPM));
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.T_Lozisko));
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.T_Uhliky));
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.Vibrace));
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.ProudUhliky));
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := USINT_TO_STRING(Rec.State));
+	line := CONCAT(IN1 := line, IN2 := ',');
+
+	IF Rec.RunLatched THEN
+		line := CONCAT(IN1 := line, IN2 := '1');
+	ELSE
+		line := CONCAT(IN1 := line, IN2 := '0');
+	END_IF;
+
+	line := CONCAT(IN1 := line, IN2 := ',');
+	IF Rec.TripActive THEN
+		line := CONCAT(IN1 := line, IN2 := '1');
+	ELSE
+		line := CONCAT(IN1 := line, IN2 := '0');
+	END_IF;
+
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := USINT_TO_STRING(Rec.TripCode));
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := Rec.SafetyText);
+
+	#FC_LogRecordToCsv := #line;
+END_FUNCTION
 
 DATA_BLOCK "DB_LogConfig"
 { S7_Optimized_Access := 'TRUE' }
@@ -1105,10 +1164,27 @@ VERSION : 0.1
 		RowsDone : Int;
 		RetryCount : Int;
 		prevFlushReq : Bool;
+		writeReq : Bool;
+		writeStarted : Bool;
+		filePath : String[64];
+		CsvLine : String[254];
+		CsvBytes : Array[0..253] of Byte;
+		writeOffset : UDInt;
+		fileOffset_Bytes : UDInt;
+		writeLength : UDInt;
+		writeResultLength : UDInt;
+		fwDone : Bool;
+		fwBusy : Bool;
+		fwError : Bool;
+
+		FileWriteC_1 {InstructionName := 'FileWriteC'; LibVersion := '1.0'} : FileWriteC;
+		FileStatus : Word;
 	END_VAR
 
 	VAR_TEMP
 		rowsAvail : Int;
+		csvLen : Int;
+		i : Int;
 	END_VAR
 
 	VAR CONSTANT
@@ -1125,12 +1201,13 @@ VERSION : 0.1
 
 BEGIN
 	AckFlush := FALSE;
-	Busy := FALSE;
-	Error := FALSE;
-	ErrorCode := 0;
 
 	CASE Step OF
 		STEP_IDLE:
+			Busy := FALSE;
+			Error := FALSE;
+			writeReq := FALSE;
+			writeStarted := FALSE;
 			IF Enable AND (FlushRequest AND NOT prevFlushReq) THEN
 				Busy := TRUE;
 				Step := STEP_PREPARE;
@@ -1158,25 +1235,111 @@ BEGIN
 				RowIdx := "DB_LogBuffer".TrendReadIdx;
 				RowsDone := 0;
 				RetryCount := 0;
+				filePath := CONCAT(IN1 := 'UserFiles/', IN2 := "DB_LogRuntime".FileName);
 				Step := STEP_OPEN;
 			END_IF;
 
 		STEP_OPEN:
-			// TODO: FileOpen APPEND na "DB_LogRuntime".FileName
-			IF "DB_LogRuntime".HeaderWritten THEN
-				Step := STEP_WR_ROW;
+			IF LEN(filePath) = 0 THEN
+				FileStatus := 16#8001;
+				Step := STEP_ERROR;
 			ELSE
-				Step := STEP_WR_HEADER;
+				IF NOT "DB_LogRuntime".HeaderWritten THEN
+					fileOffset_Bytes := 0;
+				END_IF;
+				IF "DB_LogRuntime".HeaderWritten THEN
+					Step := STEP_WR_ROW;
+				ELSE
+					Step := STEP_WR_HEADER;
+				END_IF;
 			END_IF;
 
 		STEP_WR_HEADER:
-			// TODO: FileWrite CSV hlavicky
-			"DB_LogRuntime".HeaderWritten := TRUE;
-			Step := STEP_WR_ROW;
+			IF NOT writeStarted THEN
+				CsvLine := 't_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,State,RunLatched,TripActive,TripCode,SafetyText';
+				csvLen := LEN(CsvLine);
+				FOR i := 0 TO 253 DO
+					CsvBytes[i] := 0;
+				END_FOR;
+				FOR i := 1 TO csvLen DO
+					CsvBytes[i - 1] := CHAR_TO_BYTE(CsvLine[i]);
+				END_FOR;
+				// Add CRLF (0x0D, 0x0A) for line ending
+				CsvBytes[csvLen] := 13;
+				CsvBytes[csvLen + 1] := 10;
+				writeOffset := fileOffset_Bytes;
+				writeLength := INT_TO_UDINT(csvLen + 2);
+				writeReq := TRUE;
+				writeStarted := TRUE;
+			END_IF;
+
+			FileWriteC_1(
+				REQ := writeReq,
+				Name := filePath,
+				Offset := writeOffset,
+				Length := writeLength,
+				Done => fwDone,
+				Busy => fwBusy,
+				Error => fwError,
+				Status => FileStatus,
+				ResultLength => writeResultLength,
+				Data := CsvBytes
+			);
+
+			writeReq := FALSE;
+
+			IF fwDone THEN
+				fileOffset_Bytes := fileOffset_Bytes + writeResultLength;
+				"DB_LogRuntime".HeaderWritten := TRUE;
+				writeStarted := FALSE;
+				Step := STEP_WR_ROW;
+			ELSIF fwError THEN
+				writeStarted := FALSE;
+				Step := STEP_ERROR;
+			END_IF;
 
 		STEP_WR_ROW:
-			// TODO: FileWrite jednoho radku z TrendBuffer[RowIdx]
-			Step := STEP_NEXT_ROW;
+			IF NOT writeStarted THEN
+				CsvLine := "FC_LogRecordToCsv"(Rec := "DB_LogBuffer".TrendBuffer[RowIdx]);
+				csvLen := LEN(CsvLine);
+				FOR i := 0 TO 253 DO
+					CsvBytes[i] := 0;
+				END_FOR;
+				FOR i := 1 TO csvLen DO
+					CsvBytes[i - 1] := CHAR_TO_BYTE(CsvLine[i]);
+				END_FOR;
+				// Add CRLF (0x0D, 0x0A) for line ending
+				CsvBytes[csvLen] := 13;
+				CsvBytes[csvLen + 1] := 10;
+				writeOffset := fileOffset_Bytes;
+				writeLength := INT_TO_UDINT(csvLen + 2);
+				writeReq := TRUE;
+				writeStarted := TRUE;
+			END_IF;
+
+			FileWriteC_1(
+				REQ := writeReq,
+				Name := filePath,
+				Offset := writeOffset,
+				Length := writeLength,
+				Done => fwDone,
+				Busy => fwBusy,
+				Error => fwError,
+				Status => FileStatus,
+				ResultLength => writeResultLength,
+				Data := CsvBytes
+			);
+
+			writeReq := FALSE;
+
+			IF fwDone THEN
+				fileOffset_Bytes := fileOffset_Bytes + writeResultLength;
+				writeStarted := FALSE;
+				Step := STEP_NEXT_ROW;
+			ELSIF fwError THEN
+				writeStarted := FALSE;
+				Step := STEP_ERROR;
+			END_IF;
 
 		STEP_NEXT_ROW:
 			RowsDone := RowsDone + 1;
@@ -1192,7 +1355,6 @@ BEGIN
 			END_IF;
 
 		STEP_CLOSE:
-			// TODO: FileClose
 			Step := STEP_ACK;
 
 		STEP_ACK:
@@ -1203,11 +1365,14 @@ BEGIN
 			"DB_LogRuntime".LastFlushOk := TRUE;
 			AckFlush := TRUE;
 			Busy := FALSE;
+			Error := FALSE;
 			Step := STEP_IDLE;
 
 		STEP_ERROR:
 			"DB_LogRuntime".LastFlushOk := FALSE;
 			"DB_LogRuntime".FlushErrorCount := "DB_LogRuntime".FlushErrorCount + 1;
+			"DB_LogRuntime".LastError := CONCAT(IN1 := 'FILEWRITEC STATUS ', IN2 := UINT_TO_STRING(WORD_TO_UINT(FileStatus)));
+			ErrorCode := FileStatus;
 			RetryCount := RetryCount + 1;
 			IF RetryCount <= RetryLimit THEN
 				Step := STEP_OPEN;

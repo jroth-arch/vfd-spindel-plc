@@ -1,4 +1,52 @@
-﻿// --- LOGGING FUNCTION BLOCK ---
+﻿// --- HELPER FUNCTION: Convert seconds (Real) to HH:MM:SS string ---
+FUNCTION "FC_SecondsToTimeString" : String[8]
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+	VAR_INPUT 
+		seconds : Real;
+	END_VAR
+	VAR_TEMP 
+		totalSec : DInt;
+		hours : Int;
+		minutes : Int;
+		secs : Int;
+		h1, h2, m1, m2, s1, s2 : Char;
+	END_VAR
+BEGIN
+	// Convert to integer seconds
+	totalSec := REAL_TO_DINT(seconds);
+	
+	// Calculate hours, minutes, seconds
+	hours := DINT_TO_INT(totalSec / 3600);
+	minutes := DINT_TO_INT((totalSec MOD 3600) / 60);
+	secs := DINT_TO_INT(totalSec MOD 60);
+	
+	// Limit to 99:59:59 max display
+	IF hours > 99 THEN
+		hours := 99;
+		minutes := 59;
+		secs := 59;
+	END_IF;
+	
+	// Convert to characters (ASCII 48 = '0')
+	h1 := INT_TO_CHAR(48 + (hours / 10));
+	h2 := INT_TO_CHAR(48 + (hours MOD 10));
+	m1 := INT_TO_CHAR(48 + (minutes / 10));
+	m2 := INT_TO_CHAR(48 + (minutes MOD 10));
+	s1 := INT_TO_CHAR(48 + (secs / 10));
+	s2 := INT_TO_CHAR(48 + (secs MOD 10));
+	
+	// Build string "HH:MM:SS"
+	#FC_SecondsToTimeString := CONCAT(IN1 := CHAR_TO_STRING(h1), IN2 := CHAR_TO_STRING(h2));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := ':');
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(m1));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(m2));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := ':');
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(s1));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(s2));
+END_FUNCTION
+
+// --- LOGGING FUNCTION BLOCK ---
 // Volani:
 //   OB30 (100ms): LogManager.SampleStep()   - plni buffer kazdych SampleEveryN_Cycles cyklu
 //   Main (OB1):   LogManager.FlushPending   - zkontroluj flag a zapis na SD
@@ -63,6 +111,10 @@ BEGIN
 		flushCounter := 0;
 		FlushPending := FALSE;
 		TestTimeoutReached := FALSE;
+		
+		// Format initial times for HMI display
+		"DB_LogRuntime".ElapsedTime_HMI := '00:00:00';
+		"DB_LogRuntime".TargetTime_HMI := "FC_SecondsToTimeString"(seconds := DINT_TO_REAL(TestDuration_s));
 
 		// Generate timestamp-based file name using direct digit manipulation
 		rdRet := RD_SYS_T(OUT := startDtl);
@@ -144,6 +196,9 @@ BEGIN
 			// Cas od startu: kazdy vzorek = SampleEveryN * 0.1s (OB30 period)
 			"DB_LogRuntime".Elapsed_s := "DB_LogRuntime".Elapsed_s
 				+ (INT_TO_REAL(SampleEveryN_Cycles) * 0.1);
+			
+			// Update formatted time string for HMI display
+			"DB_LogRuntime".ElapsedTime_HMI := "FC_SecondsToTimeString"(seconds := "DB_LogRuntime".Elapsed_s);
 
 			// Zapis vzorku do kruhoveho bufferu
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].t_s := "DB_LogRuntime".Elapsed_s;
@@ -307,6 +362,9 @@ NON_RETAIN
 		FileName : String[32];        // generovano pri startu testu: YYYYMMDD-HHMMSS.csv
 		HeaderWritten : Bool;         // TRUE = CSV hlavicka jiz zapsana do aktualniho souboru
 		FlushErrorCount : Int;        // pocet chyb flushe od posledniho startu testu
+		// HMI display strings (formatted time)
+		ElapsedTime_HMI : String[8];  // Formatted "HH:MM:SS" pro zobrazeni na HMI
+		TargetTime_HMI : String[8];   // Formatted target time "HH:MM:SS"
 	END_VAR
 BEGIN
 	TestActive := false;
@@ -317,6 +375,8 @@ BEGIN
 	FileName := '';
 	HeaderWritten := false;
 	FlushErrorCount := 0;
+	ElapsedTime_HMI := '00:00:00';
+	TargetTime_HMI := '00:00:00';
 END_DATA_BLOCK
 
 DATA_BLOCK "DB_LogBuffer"
@@ -1545,5 +1605,10 @@ BEGIN
 		MaxRowsPerFlush := 50,
 		RetryLimit      := 3
 	);
+	
+	//******************************************************************
+	// IO MAP WRITE - zapisat vypocitane vystupy na fyzicke vystupy
+	//******************************************************************
+	"FC_IO_Map_Write"();
 END_ORGANIZATION_BLOCK
 

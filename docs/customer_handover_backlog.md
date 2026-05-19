@@ -25,6 +25,7 @@ Stav: draft backlog pro dokonceni pred predanim
 | HO-09 | Export CSV zakaznikovi | Definovat a otestovat finalni proces stazeni CSV (SD karta / WebAPI) | Overeny postup + SAT dukaz | P1 | TODO |
 | HO-10 | SAT/FAT evidence | Pripravit test protokoly, screenshoty, PASS/FAIL, datum/cas, verze FW/HMI | Predavaci test report | P2 | TODO |
 | HO-11 | User navod | Strucny user guide pro obsluhu: start testu, stop, nastavovani, stazeni logu, reseni chyb | PDF/MD navod | P2 | TODO |
+| HO-12 | Spindle.Enable master switch | Pridat DB_HMI.Spindle.Enable (master switch) pro konzistentni API vsech bloku a flexibilni ladeni/testovani (vreteno nezavisle na zdroji) | Upraveny DB_HMI + FB_DriveCtrl + HMI obrazovka | P2 | TODO |
 
 ## Rozpad podle tvych bodu
 
@@ -47,6 +48,130 @@ Stav: draft backlog pro dokonceni pred predanim
   - DB_HMI.LabPSU.Enable
   - DB_HMI.LabPSU.Mode (1=CONST, 2=SINE_DEBUG)
   - DB_HMI.LabPSU.ConstCurrent_A
+
+---
+
+## Otázky pro zákazníka (před finalizací)
+
+### 1. Emergency Stop chování během testu
+**Otázka:** Co se má stát když obsluha stiskne fyzické E-Stop během probíhającího testu?
+- **Varianta A:** Okamžité vypnutí všeho, log se NEUKLÁDÁ (ztráta dat)
+- **Varianta B:** Okamžité vypnutí, ale PLC stihne flush log na SD (data zachována)
+- **Varianta C:** Soft stop - vřeteno zajede, pak se log uloží, pak vypnutí
+
+**Doporučení:** Varianta B - bezpečnost má přednost, ale zkusit zachránit data
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 2. Zobrazení alarmů na HMI
+**Otázka:** Když systém detekuje alarm (překročení teploty, kritické vibrace), jak to má obsluha vidět?
+- **Varianta A:** Červený popup upozornění (musí potvrdit)
+- **Varianta B:** Blikající červený indikátor na obrazovce (nenásilné)
+- **Varianta C:** Jen změna barvy Status Panel + záznam do logu (bez přerušení)
+
+**Sub-otázka:** Má se test při alarmu automaticky zastavit, nebo jen varovat a pokračovat?
+
+**Doporučení:** Popup + automatický stop u kritických alarmů (teplota, vibrace)
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 3. Změna parametrů za běhu testu
+**Otázka:** Může obsluha měnit parametry (otáčky, proud zdroje) během běžícího testu?
+- **Varianta A:** ANO - změny se aplikují okamžitě (flexibilní, ale může narušit měření)
+- **Varianta B:** NE - změny jsou zamčené, musí se zastavit test (bezpečnější)
+- **Varianta C:** ANO, ale s potvrzením "Opravdu chcete změnit za běhu?"
+
+**Doporučení:** Varianta B pro konzistentní výsledky testů
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 4. Kontrola parametrů před startem testu
+**Otázka:** Co má systém udělat když obsluha stiskne AUTO, ale parametry nejsou nastavené správně?
+- Příklad: Otáčky = 0 RPM nebo Proud = 0 A
+
+**Varianta A:** Spustit test i tak (může být záměrné)
+**Varianta B:** Zobrazit varování "Otáčky nejsou nastaveny. Pokračovat?" (s možností zrušit)
+**Varianta C:** Blokovat start + zobrazit chybu "Nastavte otáčky před startem"
+
+**Doporučení:** Varianta B - varování s možností pokračovat
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 5. Historie testů na HMI
+**Otázka:** Má HMI zobrazovat seznam předchozích testů?
+- Např.: "Poslední 5 testů: Test_001 (1h 23m), Test_002 (45m), ..."
+
+**Varianta A:** ANO - seznam na samostatné obrazovce (History Screen)
+**Varianta B:** NE - historii lze prohlížet jen přes WebAPI nebo SD kartu
+**Varianta C:** Jen základní info: "Poslední test: LOG_260519_143022.csv (dokončeno)"
+
+**Doporučení:** Varianta C - minimální info, detaily přes WebAPI
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 6. PAUSE funkce pro test
+**Otázka:** Má být možnost test POZASTAVIT (pause) místo úplného zastavení?
+- Příklad použití: Během testu zjistíte špatné měření → PAUSE → oprava senzoru → CONTINUE
+- Log by pokračoval ve stejném souboru
+
+**Varianta A:** ANO - přidat tlačítko PAUSE/CONTINUE
+**Varianta B:** NE - jen START a STOP (jednodušší, ale méně flexibilní)
+
+**Doporučení:** Varianta B pro první verzi, PAUSE jako nice-to-have pro budoucnost
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 7. Indikace stavu SD karty
+**Otázka:** Má HMI zobrazovat stav SD karty (volné místo, chyby)?
+- Např.: "SD karta: 1.2 GB free" nebo "SD: ERROR - karta chybí!"
+
+**Varianta A:** ANO - na hlavní obrazovce malý status indikátor
+**Varianta B:** ANO - ale jen na konfigurace obrazovce
+**Varianta C:** NE - chyby SD se zobrazí jen při problému se zápisem
+
+**Doporučení:** Varianta A - prevence je lepší než řešení problémů
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 8. Formát času na displeji
+**Otázka:** Jaký formát času preferujete pro zobrazení délky testu?
+- **Varianta A:** Pouze MM:SS pro testy do 1h, pak HH:MM:SS
+- **Varianta B:** Vždy HH:MM:SS (konzistentní)
+- **Varianta C:** Vždy v sekundách (1234 s) - technický přístup
+
+**Doporučení:** Varianta A - lidsky čitelné pro krátké testy
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+### 9. WebAPI nebo jen SD karta?
+**Otázka:** Jak bude zákazník primárně stahovat výsledky testů?
+- **Cesta A:** Především WebAPI (stažení přes síť) + SD jako backup
+- **Cesta B:** Především SD karta (fyzické vyjmutí) + WebAPI jako bonus
+
+**Dopad:** Ovlivňuje priority vývoje WebAPI vs. robustnost SD zápisu
+
+**Zákaznická odpověď:** _____________________________________________
+
+---
+
+**Termín pro odpovědi:** _____________________  
+**Kontaktní osoba:** _____________________
   - DB_HMI.LabPSU.DebugAmplitude_A
   - DB_HMI.LabPSU.DebugFrequency_Hz
 - Validace rozsahu + disable nepouzitych poli dle rezimu.
@@ -70,6 +195,21 @@ Stav: draft backlog pro dokonceni pred predanim
 
 ### 6) Seznam HW do md souboru
 - Viz docs/hw_list_for_customer.md.
+
+### 12) Pridani Spindle.Enable jako master switch
+**Duvod**: Konzistence API + flexibilni ladeni/testovani
+- Soucasne: Spindle se ridi jen Start/Stop pulse (nekonzistentni s LabPSU a Logging, ktere maji Enable)
+- Cil: Vsechny bloky maji stejnou strukturu: Enable (master switch) + Start/Stop (operace)
+- Implementace:
+  - Pridat `DB_HMI.Spindle.Enable : Bool` do struktury
+  - Upravit `FB_DriveCtrl` - pokud `NOT Enable`, vratit State=0 (DISABLED), AQ=0, DO=FALSE
+  - HMI: Checkbox/switch "Enable" nad tlacitky START/STOP
+- Benefit pro zakaznika:
+  - Muze testovat pouze vreteno (Enable=TRUE, LabPSU.Enable=FALSE)
+  - Muze testovat pouze zdroj (Spindle.Enable=FALSE, LabPSU.Enable=TRUE)
+  - Jasna vizualizace, co je aktivni/neaktivni
+  - Bezpecnejsi ladeni - nemuzou se omylem spustit oba systemy naraz
+- Asynchronni start Enable tagu (rozdil 10-200ms) nema vliv na funkcnost (PermitMotion safety zajisti synchronizaci)
 
 ### 7) Implementace kodu pro zapis namerenych hodnot do CSV
 - Dopsat FB/FC logiku pro:

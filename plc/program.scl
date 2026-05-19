@@ -1,5 +1,5 @@
-﻿// --- HELPER FUNCTION: Convert seconds (Real) to HH:MM:SS string ---
-FUNCTION "FC_SecondsToTimeString" : String[8]
+﻿// --- HELPER FUNCTION: Convert seconds (Real) to HHH:MM:SS string ---
+FUNCTION "FC_SecondsToTimeString" : String[9]
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
 	VAR_INPUT 
@@ -10,7 +10,7 @@ VERSION : 0.1
 		hours : Int;
 		minutes : Int;
 		secs : Int;
-		h1, h2, m1, m2, s1, s2 : Char;
+		h1, h2, h3, m1, m2, s1, s2 : USInt;
 	END_VAR
 BEGIN
 	// Convert to integer seconds
@@ -21,29 +21,31 @@ BEGIN
 	minutes := DINT_TO_INT((totalSec MOD 3600) / 60);
 	secs := DINT_TO_INT(totalSec MOD 60);
 	
-	// Limit to 99:59:59 max display
-	IF hours > 99 THEN
-		hours := 99;
+	// Limit to 999:59:59 max display (over 41 days)
+	IF hours > 999 THEN
+		hours := 999;
 		minutes := 59;
 		secs := 59;
 	END_IF;
 	
-	// Convert to characters (ASCII 48 = '0')
-	h1 := INT_TO_CHAR(48 + (hours / 10));
-	h2 := INT_TO_CHAR(48 + (hours MOD 10));
-	m1 := INT_TO_CHAR(48 + (minutes / 10));
-	m2 := INT_TO_CHAR(48 + (minutes MOD 10));
-	s1 := INT_TO_CHAR(48 + (secs / 10));
-	s2 := INT_TO_CHAR(48 + (secs MOD 10));
+	// Convert to ASCII digit values (digit type USInt, like in existing code)
+	h1 := UINT_TO_USINT(hours / 100);
+	h2 := UINT_TO_USINT((hours MOD 100) / 10);
+	h3 := UINT_TO_USINT(hours MOD 10);
+	m1 := UINT_TO_USINT(minutes / 10);
+	m2 := UINT_TO_USINT(minutes MOD 10);
+	s1 := UINT_TO_USINT(secs / 10);
+	s2 := UINT_TO_USINT(secs MOD 10);
 	
-	// Build string "HH:MM:SS"
-	#FC_SecondsToTimeString := CONCAT(IN1 := CHAR_TO_STRING(h1), IN2 := CHAR_TO_STRING(h2));
+	// Build string "HHH:MM:SS" using BYTE_TO_CHAR like existing filename code
+	#FC_SecondsToTimeString := CONCAT(IN1 := BYTE_TO_CHAR(48 + h1), IN2 := BYTE_TO_CHAR(48 + h2));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := BYTE_TO_CHAR(48 + h3));
 	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := ':');
-	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(m1));
-	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(m2));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := BYTE_TO_CHAR(48 + m1));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := BYTE_TO_CHAR(48 + m2));
 	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := ':');
-	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(s1));
-	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := CHAR_TO_STRING(s2));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := BYTE_TO_CHAR(48 + s1));
+	#FC_SecondsToTimeString := CONCAT(IN1 := #FC_SecondsToTimeString, IN2 := BYTE_TO_CHAR(48 + s2));
 END_FUNCTION
 
 // --- LOGGING FUNCTION BLOCK ---
@@ -78,6 +80,10 @@ VERSION : 0.1
 	VAR_OUTPUT
 		FlushPending : Bool;       // TRUE = buffer ma dost dat -> Main muze zapsat na SD
 		TestTimeoutReached : Bool; // TRUE = test uplynul
+		CyclesProcessed : DInt;    // Diagnostika - kolik cyklu bylo zpracovano
+		LastFlushTrigger : USInt;  // Diagnostika - co spustilo flush (1=periodic, 2=stop, 3=timeout)
+		EdgeStopDetected : Bool;   // Diagnostika - byla detekována hrana StopTest?
+		EdgeStartDetected : Bool;  // Diagnostika - byla detekována hrana StartTest?
 	END_VAR
 
 	VAR
@@ -98,7 +104,11 @@ VERSION : 0.1
 
 BEGIN
 	// Detekce startu testu (hrana)
+	EdgeStartDetected := FALSE;
+	EdgeStopDetected := FALSE;
+	
 	IF Enable AND (StartTest AND NOT prevStartTest) THEN
+		EdgeStartDetected := TRUE;  // Diagnostika
 		"DB_LogRuntime".TestActive := TRUE;
 		"DB_LogRuntime".Elapsed_s := 0.0;
 		"DB_LogRuntime".SampleCounter := 0;
@@ -111,9 +121,11 @@ BEGIN
 		flushCounter := 0;
 		FlushPending := FALSE;
 		TestTimeoutReached := FALSE;
+		CyclesProcessed := 0;  // Reset diagnostiky
+		LastFlushTrigger := 0;
 		
 		// Format initial times for HMI display
-		"DB_LogRuntime".ElapsedTime_HMI := '00:00:00';
+		"DB_LogRuntime".ElapsedTime_HMI := '000:00:00';
 		"DB_LogRuntime".TargetTime_HMI := "FC_SecondsToTimeString"(seconds := DINT_TO_REAL(TestDuration_s));
 
 		// Generate timestamp-based file name using direct digit manipulation
@@ -172,8 +184,10 @@ BEGIN
 
 	// Detekce stopu testu (hrana)
 	IF Enable AND (StopTest AND NOT prevStopTest) THEN
+		EdgeStopDetected := TRUE;  // Diagnostika
 		"DB_LogRuntime".TestActive := FALSE;
 		FlushPending := TRUE;   // finalni flush pri manuálním stopu
+		LastFlushTrigger := 2;  // manual stop flush
 		// (event log: TEST_STOP)
 	END_IF;
 
@@ -197,8 +211,18 @@ BEGIN
 			"DB_LogRuntime".Elapsed_s := "DB_LogRuntime".Elapsed_s
 				+ (INT_TO_REAL(SampleEveryN_Cycles) * 0.1);
 			
-			// Update formatted time string for HMI display
+			// Update formatted time strings for HMI display
 			"DB_LogRuntime".ElapsedTime_HMI := "FC_SecondsToTimeString"(seconds := "DB_LogRuntime".Elapsed_s);
+			
+			// Update combined time display (optional - for single field HMI display)
+			"DB_LogRuntime".TimeDisplay_HMI := CONCAT(
+				IN1 := "DB_LogRuntime".ElapsedTime_HMI,
+				IN2 := ' / '
+			);
+			"DB_LogRuntime".TimeDisplay_HMI := CONCAT(
+				IN1 := "DB_LogRuntime".TimeDisplay_HMI,
+				IN2 := "DB_LogRuntime".TargetTime_HMI
+			);
 
 			// Zapis vzorku do kruhoveho bufferu
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].t_s := "DB_LogRuntime".Elapsed_s;
@@ -225,6 +249,7 @@ BEGIN
 			IF flushCounter >= FlushEveryN THEN
 				flushCounter := 0;
 				FlushPending := TRUE;
+				LastFlushTrigger := 1;  // periodic flush
 			END_IF;
 		END_IF;
 
@@ -233,8 +258,11 @@ BEGIN
 			"DB_LogRuntime".TestActive := FALSE;
 			TestTimeoutReached := TRUE;
 			FlushPending := TRUE;   // posledni flush
+			LastFlushTrigger := 3;  // timeout flush
 			// (event log: TEST_END_TIMEOUT)
 		END_IF;
+		
+		CyclesProcessed := CyclesProcessed + 1;  // Diagnostika
 	END_IF;
 END_FUNCTION_BLOCK
 TYPE "UDT_SENSORS"
@@ -363,8 +391,9 @@ NON_RETAIN
 		HeaderWritten : Bool;         // TRUE = CSV hlavicka jiz zapsana do aktualniho souboru
 		FlushErrorCount : Int;        // pocet chyb flushe od posledniho startu testu
 		// HMI display strings (formatted time)
-		ElapsedTime_HMI : String[8];  // Formatted "HH:MM:SS" pro zobrazeni na HMI
-		TargetTime_HMI : String[8];   // Formatted target time "HH:MM:SS"
+		ElapsedTime_HMI : String[9];  // Formatted "HHH:MM:SS" pro zobrazeni na HMI (max 999h)
+		TargetTime_HMI : String[9];   // Formatted target time "HHH:MM:SS"
+		TimeDisplay_HMI : String[21]; // Combined "HHH:MM:SS / HHH:MM:SS" (optional - for single field display)
 	END_VAR
 BEGIN
 	TestActive := false;
@@ -375,8 +404,9 @@ BEGIN
 	FileName := '';
 	HeaderWritten := false;
 	FlushErrorCount := 0;
-	ElapsedTime_HMI := '00:00:00';
-	TargetTime_HMI := '00:00:00';
+	ElapsedTime_HMI := '000:00:00';
+	TargetTime_HMI := '000:00:00';
+	TimeDisplay_HMI := '000:00:00 / 000:00:00';
 END_DATA_BLOCK
 
 DATA_BLOCK "DB_LogBuffer"
@@ -526,24 +556,34 @@ BEGIN
 	IF #EmergencyStop THEN
 	    #TripCode := 1;
 	    #StatusText := 'E-STOP ACTIVE';
-	ELSIF NOT #SafetyRelayAuxOk THEN
-	    #TripCode := 2;
-	    #StatusText := 'SAFETY RELAY NOT OK';
-	ELSIF #ExternalFault THEN
-	    #TripCode := 3;
-	    #StatusText := 'EXTERNAL FAULT';
-	ELSIF #TempAlarm THEN
-	    #TripCode := 4;
-	    #StatusText := 'TEMP ALARM';
-	ELSIF #VibAlarm THEN
-	    #TripCode := 5;
-	    #StatusText := 'VIBRATION ALARM';
-	ELSIF NOT #Enable THEN
-	    #TripCode := 6;
-	    #StatusText := 'SYSTEM NOT ENABLED';
 	ELSE
-	    #TripCode := 0;
-	    #StatusText := 'READY';
+		IF NOT #SafetyRelayAuxOk THEN
+		    #TripCode := 2;
+		    #StatusText := 'SAFETY RELAY NOT OK';
+		ELSE
+			IF #ExternalFault THEN
+			    #TripCode := 3;
+			    #StatusText := 'EXTERNAL FAULT';
+			ELSE
+				IF #TempAlarm THEN
+				    #TripCode := 4;
+				    #StatusText := 'TEMP ALARM';
+				ELSE
+					IF #VibAlarm THEN
+					    #TripCode := 5;
+					    #StatusText := 'VIBRATION ALARM';
+					ELSE
+						IF NOT #Enable THEN
+						    #TripCode := 6;
+						    #StatusText := 'SYSTEM NOT ENABLED';
+						ELSE
+						    #TripCode := 0;
+						    #StatusText := 'READY';
+						END_IF;
+					END_IF;
+				END_IF;
+			END_IF;
+		END_IF;
 	END_IF;
 END_FUNCTION_BLOCK
 
@@ -640,11 +680,13 @@ BEGIN
 	            IF #CurrentSet_A > #targetCurrent_A THEN
 	                #CurrentSet_A := #targetCurrent_A;
 	            END_IF;
-	        ELSIF #CurrentSet_A > #targetCurrent_A THEN
-	            #CurrentSet_A := #CurrentSet_A - (#RampDown_A_per_s * #Cycle_s);
-	            IF #CurrentSet_A < #targetCurrent_A THEN
-	                #CurrentSet_A := #targetCurrent_A;
-	            END_IF;
+	        ELSE
+			IF #CurrentSet_A > #targetCurrent_A THEN
+			    #CurrentSet_A := #CurrentSet_A - (#RampDown_A_per_s * #Cycle_s);
+			    IF #CurrentSet_A < #targetCurrent_A THEN
+			        #CurrentSet_A := #targetCurrent_A;
+			    END_IF;
+			END_IF;
 	        END_IF;
 	        
 	        #State := 1;
@@ -868,9 +910,11 @@ BEGIN
 	    ELSE
 	        IF #stopEdge OR #HMI_Stop THEN
 	            #RunLatched := FALSE;
-	        ELSIF #startEdge THEN
-	            IF (NOT #RequireSpeedToRun) OR (#speedCmdRPM > 0.0) THEN
-	                #RunLatched := TRUE;
+	        ELSE
+	            IF #startEdge THEN
+	                IF (NOT #RequireSpeedToRun) OR (#speedCmdRPM > 0.0) THEN
+	                    #RunLatched := TRUE;
+	                END_IF;
 	            END_IF;
 	        END_IF;
 	    END_IF;
@@ -933,11 +977,13 @@ BEGIN
 	                IF #speedRampRPM > #speedCmdRPM THEN
 	                    #speedRampRPM := #speedCmdRPM;
 	                END_IF;
-	            ELSIF #speedRampRPM > #speedCmdRPM THEN
-	                #speedRampRPM := #speedRampRPM - (#RampDown_RPM_per_s * #cycle_s);
-	                IF #speedRampRPM < #speedCmdRPM THEN
-	                    #speedRampRPM := #speedCmdRPM;
-	                END_IF;
+	            ELSE
+				IF #speedRampRPM > #speedCmdRPM THEN
+				    #speedRampRPM := #speedRampRPM - (#RampDown_RPM_per_s * #cycle_s);
+				    IF #speedRampRPM < #speedCmdRPM THEN
+				        #speedRampRPM := #speedCmdRPM;
+				    END_IF;
+				END_IF;
 	            END_IF;
 	            
 	        ELSE
@@ -1004,21 +1050,25 @@ BEGIN
 	    #DQ1_LED := TRUE;
 	    #DQ0_LED := FALSE;
 	    
-	ELSIF (NOT #DI0_AuxSafetyRelay) AND (NOT #DI1_SafetyButton) THEN
-	    // DI0 = 0, DI1 = 1
-	    #DQ1_LED := FALSE;
-	    #DQ0_LED := TRUE;
-	    
-	ELSIF #DI0_AuxSafetyRelay AND (NOT #DI1_SafetyButton) THEN
-	    // DI0 = 1, DI1 = 1
-	    #DQ1_LED := FALSE;
-	    #DQ0_LED := FALSE;
-	    
 	ELSE
-		// DI0 = 1, DI1_SafetyButton = true -> relay OK, button stisknuty = E-STOP fault stav
-		// cervena LED sviti
-		#DQ1_LED := TRUE;  
-		#DQ0_LED := FALSE;
+		IF (NOT #DI0_AuxSafetyRelay) AND (NOT #DI1_SafetyButton) THEN
+		    // DI0 = 0, DI1 = 1
+		    #DQ1_LED := FALSE;
+		    #DQ0_LED := TRUE;
+		    
+		ELSE
+			IF #DI0_AuxSafetyRelay AND (NOT #DI1_SafetyButton) THEN
+			    // DI0 = 1, DI1 = 1
+			    #DQ1_LED := FALSE;
+			    #DQ0_LED := FALSE;
+			    
+			ELSE
+				// DI0 = 1, DI1_SafetyButton = true -> relay OK, button stisknuty = E-STOP fault stav
+				// cervena LED sviti
+				#DQ1_LED := TRUE;  
+				#DQ0_LED := FALSE;
+			END_IF;
+		END_IF;
 	END_IF;
 END_FUNCTION_BLOCK
 
@@ -1030,11 +1080,15 @@ NON_RETAIN
       Spindel { S7_SetPoint := 'False'} : "UDT_SPINDEL_STATUS";
       Safety : "UDT_SAFETY_STATUS";
       LabPSU { S7_SetPoint := 'False'} : "UDT_LABPSU_STATUS";
+      // HMI helper for status panel color (Basic Panel limitation - one tag only)
+      HMI_StatusColor : USInt;  // 0=GRAY (ready), 1=GREEN (running), 2=RED (error/trip)
+      HMI_StatusText : String[24];  // "TEST READY" / "TEST RUNNING" / "ERROR - TRIP ACTIVE"
    END_VAR
 
 
 BEGIN
-
+   HMI_StatusColor := 0;
+   HMI_StatusText := 'TEST READY';
 END_DATA_BLOCK
 
 DATA_BLOCK "FB_SafetyButtons_DB"
@@ -1215,6 +1269,8 @@ VERSION : 0.1
 		AckFlush : Bool;           // 1 cyklus TRUE po dokonceni
 		Error : Bool;
 		ErrorCode : Word;
+		CurrentStep : USInt;       // Diagnostika - aktualni krok
+		RowsFlushed : Int;         // Diagnostika - kolik radku bylo zapsano
 	END_VAR
 
 	VAR
@@ -1261,6 +1317,7 @@ VERSION : 0.1
 
 BEGIN
 	AckFlush := FALSE;
+	CurrentStep := Step;  // Diagnostika - exportovat aktualni krok
 
 	CASE Step OF
 		STEP_IDLE:
@@ -1353,9 +1410,11 @@ BEGIN
 				"DB_LogRuntime".HeaderWritten := TRUE;
 				writeStarted := FALSE;
 				Step := STEP_WR_ROW;
-			ELSIF fwError THEN
-				writeStarted := FALSE;
-				Step := STEP_ERROR;
+			ELSE
+				IF fwError THEN
+					writeStarted := FALSE;
+					Step := STEP_ERROR;
+				END_IF;
 			END_IF;
 
 		STEP_WR_ROW:
@@ -1396,9 +1455,11 @@ BEGIN
 				fileOffset_Bytes := fileOffset_Bytes + writeResultLength;
 				writeStarted := FALSE;
 				Step := STEP_NEXT_ROW;
-			ELSIF fwError THEN
-				writeStarted := FALSE;
-				Step := STEP_ERROR;
+			ELSE
+				IF fwError THEN
+					writeStarted := FALSE;
+					Step := STEP_ERROR;
+				END_IF;
 			END_IF;
 
 		STEP_NEXT_ROW:
@@ -1423,6 +1484,7 @@ BEGIN
 				"DB_LogBuffer".TrendReadIdx := "DB_LogBuffer".TrendReadIdx - 1000;
 			END_IF;
 			"DB_LogRuntime".LastFlushOk := TRUE;
+			RowsFlushed := RowsDone;  // Diagnostika
 			AckFlush := TRUE;
 			Busy := FALSE;
 			Error := FALSE;
@@ -1596,6 +1658,9 @@ BEGIN
 	// ----------------------------------------------------------------
 	// FAZE 2: Davkovy zapis logu na SD kartu
 	// FlushPending nebo FinalFlush spusti stavovy automat LogFlushToSd.
+	// ----------------------------------------------------------------
+	// FAZE 2: Davkovy zapis logu na SD kartu
+	// FlushPending nebo FinalFlush spusti stavovy automat LogFlushToSd.
 	// Po dokonceni AckFlush resetuje FlushPending ve FB_LogManager.
 	// ----------------------------------------------------------------
 	"LogFlushToSd"(
@@ -1605,6 +1670,61 @@ BEGIN
 		MaxRowsPerFlush := 50,
 		RetryLimit      := 3
 	);
+	
+	//******************************************************************
+	// AUTO STOP - Test timeout handling
+	// Kdyz test dosahl casu TestDuration_s, automaticky zastav vse
+	//******************************************************************
+	IF "LogManager".TestTimeoutReached THEN
+		// Automaticky zastav vreteno - puls se vygeneruje pres HMI bit
+		// (FB_DriveCtrl ma edge detection, takze staci nastavit a zresetovat v dalsim cyklu)
+		IF NOT "DB_HMI".Spindle.Stop THEN
+			"DB_HMI".Spindle.Stop := TRUE;
+		ELSE
+			"DB_HMI".Spindle.Stop := FALSE;
+			"LogManager".TestTimeoutReached := FALSE;  // Reset timeout flag
+		END_IF;
+		
+		// Vypni laboratorni zdroj
+		"DB_HMI".LabPSU.Enable := FALSE;
+		
+		// Stop log (puls) - FlushPending uz je TRUE z FB_LogManager
+		// TestActive uz je FALSE z FB_LogManager
+	END_IF;
+	
+	//******************************************************************
+	// AUTO-RESET pulse bits (aby fungovaly opakované hrany)
+	//******************************************************************
+	IF "DB_LogConfig".StartTest THEN
+		"DB_LogConfig".StartTest := FALSE;
+	END_IF;
+	IF "DB_LogConfig".StopTest THEN
+		"DB_LogConfig".StopTest := FALSE;
+	END_IF;
+	IF "DB_HMI".Spindle.Start THEN
+		"DB_HMI".Spindle.Start := FALSE;
+	END_IF;
+	IF "DB_HMI".Spindle.Stop THEN
+		"DB_HMI".Spindle.Stop := FALSE;
+	END_IF;
+	
+	//******************************************************************
+	// HMI HELPER - Status panel color (Basic Panel limitation)
+	// Priority: RED (trip) > GREEN (running) > GRAY (ready)
+	//******************************************************************
+	//******************************************************************
+	IF "DB_Status".Safety.TripActive THEN
+		"DB_Status".HMI_StatusColor := 2;  // RED - error/trip active
+		"DB_Status".HMI_StatusText := 'ERROR - TRIP ACTIVE';
+	ELSE
+		IF "DB_LogRuntime".TestActive THEN
+			"DB_Status".HMI_StatusColor := 1;  // GREEN - test running
+			"DB_Status".HMI_StatusText := 'TEST RUNNING';
+		ELSE
+			"DB_Status".HMI_StatusColor := 0;  // GRAY - ready/stopped
+			"DB_Status".HMI_StatusText := 'TEST READY';
+		END_IF;
+	END_IF;
 	
 	//******************************************************************
 	// IO MAP WRITE - zapisat vypocitane vystupy na fyzicke vystupy

@@ -25,7 +25,7 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | LabPSU | `"DB_HMI".LabPSU.BaseVoltage_V` | Real | 0.8-16 | Setpoint | Základní napětí zdroje [V] |
 | LabPSU | `"DB_HMI".LabPSU.CurrentOffset_A` | Real | 0-60 | Setpoint | DC offset proudu [A] |
 | LabPSU | `"DB_HMI".LabPSU.DebugAmplitude_A` | Real | 0-60 | Setpoint | Amplituda sinu [A] (Mode=2) |
-| LabPSU | `"DB_HMI".LabPSU.DebugFrequency_Hz` | Real | 0.1-10 | Setpoint | Frekvence sinu [Hz] (Mode=2) |
+| LabPSU | `"DB_HMI".LabPSU.DebugPeriod_min` | Real | 1-60 | Setpoint | Perioda sinu [min] (Mode=2) |
 | LabPSU | `"DB_HMI".LabPSU.Cycle_s` | Real | 0.001-1.0 | Setpoint | Časová základna [s] |
 | **KONFIGURACE** | | | | | |
 | Config | `"DB_Config".TempHighThreshold_C` | Real | 0-100 | Setpoint | Práh vysoké teploty [°C] |
@@ -218,7 +218,7 @@ Kontrolovat: "DB_Status".Spindel.State == 0 (STOPPED)
 |---|---|---|
 | 0 | OFF | - |
 | 1 | CONST | `ConstCurrent_A` |
-| 2 | SINE_DEBUG | `DebugAmplitude_A`, `DebugFrequency_Hz`, `CurrentOffset_A` |
+| 2 | SINE_DEBUG | `DebugAmplitude_A`, `DebugPeriod_min`, `CurrentOffset_A` |
 
 ### Safety Trip Codes (`"DB_Status".Safety.TripCode`)
 | Kód | Význam |

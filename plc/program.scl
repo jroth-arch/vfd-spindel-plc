@@ -450,22 +450,26 @@ NON_RETAIN
 			Mode : USInt;
 			BaseVoltage_V : Real;
 			DebugAmplitude_A : Real;
-			DebugFrequency_Hz : Real;
+			DebugPeriod_min : Real;
 			CurrentOffset_A : Real;
 			ConstCurrent_A : Real;
+			MaxCurrent_A : Real;
+			CurrentLimitExceeded : Bool;
       END_STRUCT;
    END_VAR
 
 
 BEGIN
 	LabPSU.Enable := false;
-	LabPSU.Cycle_s := 0.01;
+	LabPSU.Cycle_s := 0.1;  // OB30 = 100ms (opraveno z 0.01)
 	LabPSU.Mode := 1;
 	LabPSU.BaseVoltage_V := 2.0;
 	LabPSU.DebugAmplitude_A := 5.0;
-	LabPSU.DebugFrequency_Hz := 2.0;
+	LabPSU.DebugPeriod_min := 10.0;
 	LabPSU.CurrentOffset_A := 5.0;
 	LabPSU.ConstCurrent_A := 2.0;
+	LabPSU.MaxCurrent_A := 38.0;
+	LabPSU.CurrentLimitExceeded := false;
 
 END_DATA_BLOCK
 
@@ -598,7 +602,7 @@ VERSION : 0.1
       BaseVoltage_V : Real := 1.0;   // AQ2
       CurrentOffset_A : Real := 0.0;   // DC offset proudu
       DebugAmplitude_A : Real := 60.0;   // amplituda sinu pro debug
-      DebugFrequency_Hz : Real := 2.0;   // frekvence sinu pro debug konstantnÃ­ reÅ¾im
+      DebugPeriod_min : Real := 10.0;   // perioda sinu v minutach (default 10 min)
       ConstCurrent_A : Real := 10.0;   // rampy
       RampUp_A_per_s : Real := 50.0;
       RampDown_A_per_s : Real := 80.0;   // parametry zdroje BK1900B
@@ -616,6 +620,7 @@ VERSION : 0.1
 	AQ_OutputOff_V : Real := 5.0;   // 0.0 V = enable, 5.0 V = output off
       State : USInt := 0;   // 0 OFF, 1 CONST, 2 SINE
       StatusText : String[40] := '';
+      CurrentLimitExceeded : Bool := false;   // indikator, ze uzivatel zkusil zadat vyssi proud nez limit
    END_VAR
 
    VAR 
@@ -639,8 +644,12 @@ BEGIN
 	    #AQ_OutputOff_V := 5.0;
 	    #State := 0;
 	    #StatusText := 'SAFE OFF';
+	    #CurrentLimitExceeded := false;
 	    RETURN;
 	END_IF;
+	
+	// reset CurrentLimitExceeded flag na zacatku cyklu
+	#CurrentLimitExceeded := false;
 	
 	// vystup zdroje povolen
 	#AQ_OutputOff_V := 0.0;
@@ -666,6 +675,11 @@ BEGIN
 	        
 	    1: // CONST
 	        #targetCurrent_A := #ConstCurrent_A;
+	        
+	        // detekce prekroceni limitu - pred clampingem
+	        IF #targetCurrent_A > #PSU_MaxCurrent_A THEN
+	            #CurrentLimitExceeded := true;
+	        END_IF;
 	        
 	        IF #targetCurrent_A < 0.0 THEN
 	            #targetCurrent_A := 0.0;
@@ -693,7 +707,12 @@ BEGIN
 	        #StatusText := 'CONST';
 	        
 	    2: // SINE_DEBUG
-	        #omega := 6.2831853 * #DebugFrequency_Hz; // 2*pi*f
+	        // Vypocet omega z periody v minutach: omega = 2*pi / (T_min * 60)
+	        IF #DebugPeriod_min > 0.0 THEN
+	            #omega := 6.2831853 / (#DebugPeriod_min * 60.0); // 2*pi / (T_min * 60s)
+	        ELSE
+	            #omega := 0.0; // ochrana proti deleni nulou
+	        END_IF;
 	        #offsetAutoAdjusted := FALSE;
 	        
 	        #phase_rad := #phase_rad + (#omega * #Cycle_s);
@@ -712,6 +731,12 @@ BEGIN
 	            #offsetAutoAdjusted := TRUE;
 	        END_IF;
 	        #targetCurrent_A := #effectiveOffset_A + (#DebugAmplitude_A * #sineValue);
+	        
+	        // detekce prekroceni limitu - pred clampingem
+	        IF #targetCurrent_A > #PSU_MaxCurrent_A THEN
+	            #CurrentLimitExceeded := true;
+	        END_IF;
+	        
 	        // current limit zdroje nemuze byt zaporny
 	        IF #targetCurrent_A < 0.0 THEN
 	            #targetCurrent_A := 0.0;
@@ -748,9 +773,11 @@ BEGIN
 	    #AQ2_VoltageCtrl_V := 0.0;
 	END_IF;
 	
-	// proud
-	IF #PSU_MaxCurrent_A > 0.0 THEN
-	    #AQ3_CurrentCtrl_V := (#CurrentSet_A / #PSU_MaxCurrent_A) * #RemoteMaxCtrl_V;
+	// proud - kalibrovany prepocet na zaklade mereni
+	// I [A] = 15.92 * U [V] - 6.09  ->  U [V] = (I [A] / 15.92) + 0.383
+	// Dead zone: 0.383 V
+	IF #CurrentSet_A > 0.0 THEN
+	    #AQ3_CurrentCtrl_V := (#CurrentSet_A / 15.92) + 0.383;
 	ELSE
 	    #AQ3_CurrentCtrl_V := 0.0;
 	END_IF;
@@ -763,6 +790,8 @@ BEGIN
 	    #AQ2_VoltageCtrl_V := #RemoteMaxCtrl_V;
 	END_IF;
 	
+	// clamp proudoveho ridiciho signalu
+	// Dead zone: pod 0.383V zdroj nereaguje
 	IF #AQ3_CurrentCtrl_V < 0.0 THEN
 	    #AQ3_CurrentCtrl_V := 0.0;
 	END_IF;
@@ -1181,7 +1210,7 @@ NON_RETAIN
 	END_VAR
 
 BEGIN
-	TempHighThreshold_C := 35.0;
+	TempHighThreshold_C := 65.0;
 	VibCriticalThreshold := 0.0;
 	DAC_MaxDacRange := 27648;
 	InputSim.EnableSafetyRelayAuxOverride := false;
@@ -1540,13 +1569,13 @@ BEGIN
 	         BaseVoltage_V := "DB_HMI".LabPSU.BaseVoltage_V,
 	         CurrentOffset_A := "DB_HMI".LabPSU.CurrentOffset_A,
 	         DebugAmplitude_A := "DB_HMI".LabPSU.DebugAmplitude_A,
-	         DebugFrequency_Hz := "DB_HMI".LabPSU.DebugFrequency_Hz,
+	         DebugPeriod_min := "DB_HMI".LabPSU.DebugPeriod_min,
 	         ConstCurrent_A := "DB_HMI".LabPSU.ConstCurrent_A,
 	         RampUp_A_per_s := 50.0,
 	         RampDown_A_per_s := 80.0,
 	         PSU_MinVoltage_V := 0.8,
 	         PSU_MaxVoltage_V := 16.0,
-	         PSU_MaxCurrent_A := 60.0,
+	         PSU_MaxCurrent_A := "DB_HMI".LabPSU.MaxCurrent_A,
 	         RemoteMaxCtrl_V := 5.0,
 	         VoltageSet_V => "DB_Status".LabPSU.VoltageSet_V,
 	         CurrentSet_A => "DB_Status".LabPSU.CurrentSet_A,
@@ -1554,7 +1583,8 @@ BEGIN
 	         AQ3_CurrentCtrl_V => "DB_IO".AQ.AQ1_CurrentCtrl_V,
 	         AQ_OutputOff_V => "DB_IO".AQ.AQ3_OutputOff,
 	         State => "DB_Status".LabPSU.State,
-	         StatusText => "DB_Status".LabPSU.StatusText);
+	         StatusText => "DB_Status".LabPSU.StatusText,
+	         CurrentLimitExceeded => "DB_HMI".LabPSU.CurrentLimitExceeded);
 
 	// Logovani - vzorkovani v OB30 (100ms), SampleEveryN=2 -> 200ms vzorek
 	// File I/O (FlushPending) se zpracovava v Main (OB1), ne zde

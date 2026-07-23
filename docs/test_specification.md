@@ -139,17 +139,20 @@ Ucel: overit, ze i bez pripojeneho safety buttonu/rele lze pro SAT vynutit Safet
 - `"DB_Status".Safety.PermitMotion == true`
 - `"DB_IO".AQ.AQ3_OutputOff == 0.0`  (zdroj povolen)
 - `"DB_IO".AQ.AQ2_VoltageCtrl_V ~= 5.0`  (16 V odpovídá 5 V řídicího signálu)
-- `"DB_IO".AQ.AQ1_CurrentCtrl_V ~= 2.5`  (30 A odpovídá 2.5 V řídicího signálu)
+- `"DB_IO".AQ.AQ3_CurrentCtrl_V ~= 2.27`  **[AKTUALIZOVÁNO: kalibrace 2026-07-18]** (30 A → 2.27 V dle kalibrace)
 
 ### Pracovní rozsahy (komentář pro test page)
 - `AQ3_OutputOff`: `5.0 V = OFF`, `0.0 V = ON`
-- `AQ1_CurrentCtrl_V`: `0..5 V` odpovídá `0..60 A` (např. `30 A => 2.5 V`)
+- `AQ3_CurrentCtrl_V`: Kalibrované mapování `U [V] = (I [A] / 15.92) + 0.383`
+	- Příklady: `10 A → 1.01 V`, `30 A → 2.27 V`, `60 A → 4.15 V`
+	- Dead zone: 0.383 V (pod touto hodnotou zdroj nereaguje)
 - `AQ2_VoltageCtrl_V`: `0..5 V` odpovídá výkonovému výstupu zdroje `~0.8..16 V`
 	- `5.0 V => 16 V`
 	- `0.0 V => ~0.8 V` (minimální reálné výstupní napětí BK1900B)
 
 ### Poznámka
 - Bez reálného BK1900B je to logický test přepočtu a propisování řídicích hodnot.
+- **Kalibrace 2026-07-18:** Mapování proudu aktualizováno dle naměřené charakteristiky (viz [labpsu_calibration.md](labpsu_calibration.md))
 
 ## SAT-05 – LabPSU SAFE OFF
 
@@ -172,13 +175,13 @@ Ucel: overit, ze i bez pripojeneho safety buttonu/rele lze pro SAT vynutit Safet
 - `"DB_HMI".LabPSU.Mode = 2`
 - `"DB_HMI".LabPSU.CurrentOffset_A = 5.0`
 - `"DB_HMI".LabPSU.DebugAmplitude_A = 5.0`
-- `"DB_HMI".LabPSU.DebugFrequency_Hz = 2.0`
+- `"DB_HMI".LabPSU.DebugPeriod_min = 10.0`
 
 ### Ověř
 - `"DB_HMI".LabPSU.Mode == 2`
 - `"DB_HMI".LabPSU.CurrentOffset_A == 5.0`
 - `"DB_HMI".LabPSU.DebugAmplitude_A == 5.0`
-- `"DB_HMI".LabPSU.DebugFrequency_Hz == 2.0`
+- `"DB_HMI".LabPSU.DebugPeriod_min == 10.0`
 
 ### Volitelně ověř (pokud Safety dovolí výstup)
 - `"DB_Status".LabPSU.State == 2`

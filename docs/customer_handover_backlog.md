@@ -3,6 +3,44 @@
 Datum: 2026-05-18
 Stav: draft backlog pro dokonceni pred predanim
 
+---
+
+## 📅 TODO NA ZÍTRA (2026-07-19)
+
+**Kalibrace LabPSU - verifikace**
+
+- [ ] **Nahrát upravený program do PLC** (domácí setup bez periferií)
+  - Projekt: `tia/vfd-spindel-plc/vfd-spindel-plc.ap20`
+  - User: `admin` / Heslo: `Admin@12345`
+  - Změny v: `plc/program.scl` (FB_LabPSU, řádky ~754-762)
+  - ⚠️ **ZÁLOHA**: Před nahráním zálohovat aktuální verzi PLC programu!
+  
+- [ ] **Oživit TIA Portal** na domácím počítači
+  - Zkontrolovat funkčnost prostředí
+  - Ověřit komunikaci s PLC
+  
+- [ ] **Spustit SAT-04 test** (pokud možné bez HW)
+  - Očekávaná hodnota: `AQ3_CurrentCtrl_V ≈ 2.27V` pro 30A (tolerance ±0.1V)
+  - Původní: 2.5V → Nová: 2.27V (kalibrace 2026-07-18)
+  
+- [ ] **Ověřit výpočet** v online režimu
+  - Pozorovat `DB_Status.LabPSU.CurrentSet_A` vs. `DB_IO.AQ.AQ3_CurrentCtrl_V`
+  - Kontrola: U [V] = (I [A] / 15.92) + 0.383
+  
+- [ ] **Poznámky k dalším prioritám** (doplnit dle potřeby):
+  - **2026-07-22:** Změna DebugFrequency_Hz → DebugPeriod_min (perioda v minutách)
+  - ⚠️ **Breaking change** - po nahrání nastavit LabPSU parametry znovu!
+  - Testovat SAT-06 s periodou 10 min (600s cyklus)
+  - _____________________________________________
+  - _____________________________________________
+
+**Reference:**
+- Dokumentace kalibrace: [labpsu_calibration.md](labpsu_calibration.md)
+- Shrnutí změn: [../KALIBRACE_SUMMARY.md](../KALIBRACE_SUMMARY.md)
+- Test specifikace: [test_specification.md](test_specification.md) - SAT-04
+
+---
+
 ## Cile predani
 - Zakaznik umi spustit a zastavit test pres HMI.
 - Zakaznik vidi prubeh testu (elapsed time, stavy).
@@ -16,7 +54,7 @@ Stav: draft backlog pro dokonceni pred predanim
 |---|---|---|---|---|---|
 | HO-01 | HMI Start/Stop | Implementovat tlacitka Auto a Stop s vazbou na PLC tagy (edge/latch dle tabulky) | Funkcni ovladani testu z HMI | P1 | TODO |
 | HO-02 | HMI elapsed time | Zobrazit ubehly cas testu z DB_LogRuntime.Elapsed_s + format mm:ss/hh:mm:ss | Live casovac na HMI | P1 | TODO |
-| HO-03 | HMI LabPSU screen | Udelat obrazovku pro parametry LabPSU (Enable, Mode, ConstCurrent_A, DebugAmplitude_A, DebugFrequency_Hz) + validace rozsahu | Nastavovaci obrazovka + save/apply | P1 | TODO |
+| HO-03 | HMI LabPSU screen | Udelat obrazovku pro parametry LabPSU (Enable, Mode, ConstCurrent_A, DebugAmplitude_A, DebugPeriod_min) + validace rozsahu | Nastavovaci obrazovka + save/apply | P1 | TODO |
 | HO-04 | Predani PLC bez TIA | Pripravit CPU image/Load memory card postup (nebo commissioning package) + navod krok-za-krokem | Predavaci balicek PLC + navod | P1 | TODO |
 | HO-05 | Predani HMI bez TIA | Pripravit deploy balicek web/HMI (staticke soubory + deploy script + login postup) | ZIP/Repo balicek + navod nasazeni | P1 | TODO |
 | HO-06 | HW seznam | Sestavit a potvrdit seznam HW komponent, kabelaze a signalu | docs/hw_list_for_customer.md | P1 | IN_PROGRESS |
@@ -173,7 +211,7 @@ Stav: draft backlog pro dokonceni pred predanim
 **Termín pro odpovědi:** _____________________  
 **Kontaktní osoba:** _____________________
   - DB_HMI.LabPSU.DebugAmplitude_A
-  - DB_HMI.LabPSU.DebugFrequency_Hz
+  - DB_HMI.LabPSU.DebugPeriod_min
 - Validace rozsahu + disable nepouzitych poli dle rezimu.
 
 ### 4) Jak dorucit PLC projekt bez TIA

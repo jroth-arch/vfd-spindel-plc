@@ -188,7 +188,7 @@ stateDiagram-v2
 
 | Proměnná | Typ | Defaultní | Účel |
 |----------|-----|-----------|------|
-| `TempHighThreshold_C` | Real | 35.0 | Práh teploty pro trip |
+| `TempHighThreshold_C` | Real | 65.0 | Práh teploty pro trip |
 | `VibCriticalThreshold` | Real | 0.0 | Práh vibrací (placeholder) |
 | `DAC_MaxDacRange` | Int | 27648 | Max rozsah DAC převodníku (0–27648) |
 
@@ -205,11 +205,11 @@ stateDiagram-v2
 | | `Speed_RPM` | Real | Setpoint otáček vřetena |
 | | `Enable` | Bool | Enable vřetena |
 | **LabPSU** | `Enable` | Bool | Enable zdroje |
-| | `Cycle_s` | Real | Časová základna výpočtu (s), typicky 0.01 |
+| | `Cycle_s` | Real | Časová základna výpočtu (s), **MUSÍ = perioda OB** (OB30=0.1s) |
 | | `Mode` | USInt | 0=OFF, 1=CONST, 2=SINE_DEBUG |
 | | `BaseVoltage_V` | Real | Napětí na výstupu (0.8–16 V) |
 | | `DebugAmplitude_A` | Real | Amplituda sinusu pro debug režim (A) |
-| | `DebugFrequency_Hz` | Real | Frekvence sinusu (Hz, default 2.0) |
+| | `DebugPeriod_min` | Real | Perioda sinusu (min, default 10.0) |
 | | `CurrentOffset_A` | Real | DC offset proudu (A) |
 | | `ConstCurrent_A` | Real | Cílový proud v CONST režimu (A) |
 
@@ -305,14 +305,21 @@ Mode                   uint    0/1/2     — 0=OFF, 1=CONST, 2=SINE
 BaseVoltage_V          real    1.0–16.0  — Napětí výstupu
 CurrentOffset_A        real    0–60      — DC offset (SINE režim)
 DebugAmplitude_A       real    0–60      — Amplituda sinusu
-DebugFrequency_Hz      real    0.1–10    — Frekvence sinusu
+DebugPeriod_min        real    1–60      — Perioda sinusu v minutách
 ConstCurrent_A         real    0–60      — Cílový proud (CONST režim)
 RampUp_A_per_s         real    50.0      — Zrychlení CONST
 RampDown_A_per_s       real    80.0      — Zpomalení CONST
 PSU_MinVoltage_V       real    0.8       — Min. napětí (stabilita)
 PSU_MaxVoltage_V       real    16.0      — Max. napětí (zdroj limit)
-PSU_MaxCurrent_A       real    60.0      — Max. proud (zdroj limit)
+PSU_MaxCurrent_A       real    38.0      — Max proud ZADÁNÍ (limit zákazníka, clamping)
 RemoteMaxCtrl_V        real    5.0       — Max. kontrolní napětí
+```
+
+**Poznámka k proudovému limitu:**
+- `PSU_MaxCurrent_A = 38.0` omezuje pouze ZADÁVÁNÍ hodnoty uživatelem
+- Kalibrovaný přepočet `U = (I/15.92) + 0.383` platí pro celý rozsah 0-60A
+- Hardwarový limit zdroje BK1900B: 60A (fyzická kapacita)
+
 ```
 
 ### FB_SafetyGate — Bezpečnostní logika
@@ -366,12 +373,12 @@ Kde:
 
 ## Poznámky pro údržbu
 
-1. **Teplotní threshold**: Centralizován v `DB_Config.TempHighThreshold_C` (default 35 °C).
+1. **Teplotní threshold**: Centralizován v `DB_Config.TempHighThreshold_C` (default 65 °C).
    - Změna thresholdu: edituj DB_Config přímo v TIA nebo změň value v `BEGIN`.
 
 2. **SINE režim**: Generuje plný sinusový průběh s DC offsetem.
    - Pokud `offset < amplitude` → PLC auto-korekta na `offset = amplitude`.
-   - Výstup je vždy clampován na 0–60 A (max zdroje).
+   - Výstup je vždy clampován na 0–38 A (limit zákazníka).
    - StatusText zobrazí "AUTO OFFSET" pokud byla korekta použita.
 
 3. **OutputOff signál**: Nyní **analogový** (AQ_Ch4, 0–5 V):

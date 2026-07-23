@@ -147,8 +147,8 @@ const SCENARIOS = [
   {
     id: 'SAT-04',
     name: 'LabPSU AQ scaling (CONST)',
-    description: 'Overi vystupy AQ2/AQ1/AQ3 a jejich prepocet na ridici napeti.',
-    comment: 'Pracovni rozsahy: AQ3_OutputOff 5V=OFF, 0V=ON; AQ1_CurrentCtrl_V 0..5V <-> 0..60A (30A=2.5V); AQ2_VoltageCtrl_V 0..5V <-> ~0.8..16V (5V=16V, 0V~0.8V).',
+    description: 'Overi vystupy AQ2/AQ3 a jejich prepocet na ridici napeti.',
+    comment: 'Pracovni rozsahy: AQ3_OutputOff 5V=OFF, 0V=ON; AQ3_CurrentCtrl_V kalibrovano: U=(I/15.92)+0.383 (30A=2.27V); AQ2_VoltageCtrl_V 0..5V <-> ~0.8..16V (5V=16V).',
     writes: [
       { tag: '"DB_Config".InputSim.EnableSafetyRelayAuxOverride', value: true },
       { tag: '"DB_Config".InputSim.SafetyRelayAuxOk', value: true },
@@ -165,7 +165,7 @@ const SCENARIOS = [
       { tag: '"DB_Status".Safety.PermitMotion', op: 'eq', expected: true },
       { tag: '"DB_IO".AQ.AQ3_OutputOff', op: 'approx', expected: 0.0, tol: 0.05 },
       { tag: '"DB_IO".AQ.AQ2_VoltageCtrl_V', op: 'approx', expected: 5.0, tol: 0.05 },
-      { tag: '"DB_IO".AQ.AQ1_CurrentCtrl_V', op: 'approx', expected: 2.5, tol: 0.05 }
+      { tag: '"DB_IO".AQ.AQ3_CurrentCtrl_V', op: 'approx', expected: 2.27, tol: 0.1 }
     ]
   },
   {
@@ -190,13 +190,13 @@ const SCENARIOS = [
       { tag: '"DB_HMI".LabPSU.Mode', value: 2 },
       { tag: '"DB_HMI".LabPSU.CurrentOffset_A', value: 5.0 },
       { tag: '"DB_HMI".LabPSU.DebugAmplitude_A', value: 5.0 },
-      { tag: '"DB_HMI".LabPSU.DebugFrequency_Hz', value: 2.0 }
+      { tag: '"DB_HMI".LabPSU.DebugPeriod_min', value: 10.0 }
     ],
     checks: [
       { tag: '"DB_HMI".LabPSU.Mode', op: 'eq', expected: 2 },
       { tag: '"DB_HMI".LabPSU.CurrentOffset_A', op: 'eq', expected: 5.0 },
       { tag: '"DB_HMI".LabPSU.DebugAmplitude_A', op: 'eq', expected: 5.0 },
-      { tag: '"DB_HMI".LabPSU.DebugFrequency_Hz', op: 'eq', expected: 2.0 }
+      { tag: '"DB_HMI".LabPSU.DebugPeriod_min', op: 'eq', expected: 10.0 }
     ]
   },
   {

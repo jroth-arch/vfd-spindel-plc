@@ -322,7 +322,7 @@ OP-03 Rozsiritelnost
 
 - [ ] HMI-102: **Konstantní proud (Mode=1)**
   - Input pole: `"DB_HMI".LabPSU.ConstCurrent_A` [A]
-  - Rozsah: 0–60 A
+  - Rozsah: 0–38 A (limit zákazníka)
   - Label: "Konstantní proud [A]"
 
 - [ ] HMI-103: **Základní napětí zdroje**
@@ -332,19 +332,19 @@ OP-03 Rozsiritelnost
 
 - [ ] HMI-104: **DC offset proudu**
   - Input pole: `"DB_HMI".LabPSU.CurrentOffset_A` [A]
-  - Rozsah: 0–60 A
+  - Rozsah: 0–38 A (limit zákazníka)
   - Label: "DC offset [A]"
 
 - [ ] HMI-105: **Amplituda sinu (Mode=2)**
   - Input pole: `"DB_HMI".LabPSU.DebugAmplitude_A` [A]
-  - Rozsah: 0–60 A
+  - Rozsah: 0–38 A (limit zákazníka)
   - Label: "Amplituda sinu [A]"
   - Viditelnost: Pouze když Mode=2
 
-- [ ] HMI-106: **Frekvence sinu (Mode=2)**
-  - Input pole: `"DB_HMI".LabPSU.DebugFrequency_Hz` [Hz]
-  - Rozsah: 0.1–10 Hz
-  - Label: "Frekvence [Hz]"
+- [ ] HMI-106: **Perioda sinu (Mode=2)**
+  - Input pole: `"DB_HMI".LabPSU.DebugPeriod_min` [min]
+  - Rozsah: 1–60 min
+  - Label: "Perioda [min]"
   - Viditelnost: Pouze když Mode=2
 
 - [ ] HMI-107: **Enable/Disable zdroje**
@@ -357,6 +357,18 @@ OP-03 Rozsiritelnost
     - `"DB_Status".LabPSU.VoltageSet_V` → "Napětí: 2.5 V"
     - `"DB_Status".LabPSU.CurrentSet_A` → "Proud: 10.2 A"
     - `"DB_Status".LabPSU.StatusText` → "CONST MODE"
+
+- [ ] HMI-108b: **Zobrazení maximálního limitu proudu**
+  - Read-only nebo editable pole:
+    - `"DB_HMI".LabPSU.MaxCurrent_A` → "Max proud: 38.0 A"
+  - Poznámka: Hodnota je konfigurovatelná (doporučeno read-only pro uživatele, editable pro servis)
+
+- [ ] HMI-108c: **⚠️ Indikátor překročení limitu proudu**
+  - Červené varovné pole viditelné pouze když `"DB_HMI".LabPSU.CurrentLimitExceeded = TRUE`
+  - Text: "⚠️ VAROVÁNÍ: Zadaný proud překračuje max. limit!"
+  - Barva: Červená (alarmující)
+  - Pozice: Pod vstupními poli pro proud
+  - Účel: Okamžitý vizuální feedback pro uživatele
 
 - [ ] HMI-109: **Navigační tlačítko zpět na Main**
   - Button "< Zpět na hlavní obrazovku"

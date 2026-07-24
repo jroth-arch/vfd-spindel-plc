@@ -269,6 +269,7 @@ TYPE "UDT_SENSORS"
 VERSION : 0.1
    STRUCT
       AI1_Teplota_Lozisko_C : Real;
+      AI2_Teplota_Kartace_C : Real;
       TM_Rotation_A_Channel : Real;
    END_STRUCT;
 
@@ -495,7 +496,8 @@ END_TYPE
 TYPE "UDT_IO_AI"
 VERSION : 0.1
    STRUCT
-      AI1_TeplotaKomaraKartac_Ohm : Int;
+      AI1_TeplotaLoziska_Ohm : Int;
+      AI2_TeplotaKartace_Ohm : Int;
    END_STRUCT;
 
 END_TYPE
@@ -630,6 +632,7 @@ VERSION : 0.1
       sineValue : Real := 0.0;
 	effectiveOffset_A : Real := 0.0;
 	offsetAutoAdjusted : Bool := FALSE;
+	prevMode : USInt := 0;   // Pamatuje si predchozi Mode pro detekci prechodu
    END_VAR
 
 
@@ -707,6 +710,11 @@ BEGIN
 	        #StatusText := 'CONST';
 	        
 	    2: // SINE_DEBUG
+	        // Pri prvnim vstupu do SINE rezimu resetovat fazi na -pi/2, aby prubeh zacinali od 0A
+	        IF #prevMode <> 2 THEN
+	            #phase_rad := -1.5707963;  // -pi/2 rad, aby SIN(-pi/2) = -1 -> proud = offset - amplitude = 0A
+	        END_IF;
+	        
 	        // Vypocet omega z periody v minutach: omega = 2*pi / (T_min * 60)
 	        IF #DebugPeriod_min > 0.0 THEN
 	            #omega := 6.2831853 / (#DebugPeriod_min * 60.0); // 2*pi / (T_min * 60s)
@@ -798,6 +806,9 @@ BEGIN
 	IF #AQ3_CurrentCtrl_V > #RemoteMaxCtrl_V THEN
 	    #AQ3_CurrentCtrl_V := #RemoteMaxCtrl_V;
 	END_IF;
+	
+	// Ulozit aktualni Mode pro detekci prechodu v pristim cyklu
+	#prevMode := #Mode;
 	
 END_FUNCTION_BLOCK
 
@@ -1184,7 +1195,9 @@ DATA_BLOCK "DB_Alarms"
 VERSION : 0.1
 NON_RETAIN
    VAR 
-      TempHigh : Bool;
+      TempHighLozisko : Bool;
+      TempHighKartace : Bool;
+      TempAlarm : Bool;   // Kombinovany alarm (Lozisko OR Kartace)
       VibCritical : Bool;
    END_VAR
 
@@ -1225,7 +1238,8 @@ FUNCTION "FC_ConvertIO" : Void
 VERSION : 0.1
 
 BEGIN
-	"DB_HMI".Sensors.AI1_Teplota_Lozisko_C := "DB_IO".AI.AI1_TeplotaKomaraKartac_Ohm / 10;
+	"DB_HMI".Sensors.AI1_Teplota_Lozisko_C := "DB_IO".AI.AI1_TeplotaLoziska_Ohm / 10.0;
+	"DB_HMI".Sensors.AI2_Teplota_Kartace_C := "DB_IO".AI.AI2_TeplotaKartace_Ohm / 10.0;
 	"DB_HMI".Sensors.TM_Rotation_A_Channel := ("DB_IO".TM.MeasuredValue * 60) / 2;
 END_FUNCTION
 
@@ -1259,7 +1273,8 @@ BEGIN
 	ELSE
 		"DB_IO".DI.EmergencyStop := NOT "DI1_SafetyRelay_Released_Safety_Button"; // DI1_SafetyRelay_Released_Safety_Button = False znamena, ze mame stisknuty safety button, ktery je normally closed a po stisknuti se kontakt rozpoji a na vstupu je 0V
 	END_IF;
-	"DB_IO".AI.AI1_TeplotaKomaraKartac_Ohm := "AI1_RTD";
+	"DB_IO".AI.AI1_TeplotaLoziska_Ohm := "AI1_RTD";
+	"DB_IO".AI.AI2_TeplotaKartace_Ohm := "AI2_RTD";
 END_FUNCTION
 
 DATA_BLOCK "FB_LabPSU_DB"
@@ -1636,14 +1651,16 @@ BEGIN
 	//******************************************************************
 	// CALL FB BLOCKS - PRODUCTION LOGIC
 	//******************************************************************
-	"DB_Alarms".TempHigh := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C > "DB_Config".TempHighThreshold_C;
+	"DB_Alarms".TempHighLozisko := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C > "DB_Config".TempHighThreshold_C;
+	"DB_Alarms".TempHighKartace := "DB_HMI".Sensors.AI2_Teplota_Kartace_C > "DB_Config".TempHighThreshold_C;
+	"DB_Alarms".TempAlarm := "DB_Alarms".TempHighLozisko OR "DB_Alarms".TempHighKartace;
 
 	// Nektere safety signaly nemame implementovane - teplota, vibrace. Zatim bude potreba je simulovat
 	"Safety_1"(Enable:= TRUE, // This signal can be used to bind to another system in the future
 	           EmergencyStop:="DB_IO".DI.EmergencyStop,
 	           SafetyRelayAuxOk:= "DB_IO".DI.SafetyRelayAuxOk,
 	           ExternalFault:= "DB_IO".DI.ExternalFault,
-	           TempAlarm:="DB_Alarms".TempHigh,
+	           TempAlarm:="DB_Alarms".TempAlarm,
 	           VibAlarm:= "DB_Alarms".VibCritical,
 	           SafetyOk => "DB_Status".Safety.SafetyOk,
 	           PermitMotion => "DB_Status".Safety.PermitMotion,

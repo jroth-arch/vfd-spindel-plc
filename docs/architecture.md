@@ -31,7 +31,7 @@ flowchart TD
     subgraph DB_Status["💾 Datové bloky — Stav + IO"]
         DB_S["DB_Status<br/>Safety, Spindel, LabPSU"]
         DB_IO["DB_IO<br/>DQ, DI, AI, AQ"]
-        DB_Alm["DB_Alarms<br/>TempHigh, VibCritical"]
+        DB_Alm["DB_Alarms<br/>TempHighLozisko, TempHighKartace, TempAlarm<br/>VibCritical"]
     end
     
     subgraph IO["📡 I/O Mapování"]
@@ -51,7 +51,7 @@ flowchart TD
     DB_Conf -->|TempHighThreshold| DB_S
     
     OB_Main -->|4| FB_SG
-    DB_Alm -->|TempHigh| FB_SG
+    DB_Alm -->|TempAlarm| FB_SG
     DB_IO -->|EmergencyStop| FB_SG
     FB_SG -->|PermitMotion| DB_S
     
@@ -74,7 +74,8 @@ flowchart TD
     FB_LP -->|AQ2, AQ3, AQ_OutputOff| DB_IO
     
     %% Temp alarm calculation
-    OB_Main -->|TempHigh calc| DB_Alm
+    OB_Main -->|TempHighLozisko calc| DB_Alm
+    OB_Main -->|TempHighKartace calc| DB_Alm
     DB_HMI -->|AI1_Teplota| DB_Alm
     
     style OB fill:#e1f5ff
@@ -196,7 +197,8 @@ stateDiagram-v2
 
 | Struktura | Pole | Typ | Účel |
 |-----------|------|-----|------|
-| **Sensors** | `AI1_Teplota_Lozisko_C` | Real | Teplota ložiska (°C) — z FC_ConvertIO |
+| **Sensors** | `AI1_Teplota_Lozisko_C` | Real | Teplota ložiska (°C) — z RTD AI1 |
+| | `AI2_Teplota_Kartace_C` | Real | Teplota kartáčů (°C) — z RTD AI2 |
 | | `TM_Rotation_A_Channel` | Real | Otáčky (RPM) — z HSC čítače |
 | **System** | `Enable` | Bool | Globální enable systému |
 | **Spindle** | `Start` | Bool | Start tlačítko |
@@ -250,7 +252,8 @@ stateDiagram-v2
 
 | Pole | Zdroj | Škálování |
 |------|--------|-----------|
-| `AI1_TeplotaKomaraKartac_Ohm` | `AI1_RTD` | Raw (Ohmy) → °C (FC_ConvertIO: /10) |
+| `AI1_TeplotaLoziska_Ohm` | `AI1_RTD` | Raw (Ohmy) → °C (mapování: /10) |
+| `AI2_TeplotaKartace_Ohm` | `AI2_RTD` | Raw (Ohmy) → °C (mapování: /10) |
 
 #### DQ — Digitální výstupy
 
@@ -329,7 +332,7 @@ Enable                 bool    — Globální enable (TRUE = systém povolený)
 EmergencyStop          bool    — E-Stop aktivní (1 = aktivní)
 SafetyRelayAuxOk       bool    — Safety relé OK (1 = OK)
 ExternalFault          bool    — Externí chyba
-TempAlarm              bool    — Alarm teploty (z DB_Alarms.TempHigh)
+TempAlarm              bool    — Alarm teploty (z DB_Alarms.TempAlarm = TempHighLozisko OR TempHighKartace)
 VibAlarm               bool    — Alarm vibrací (z DB_Alarms.VibCritical)
 
 Výstupy:
@@ -356,7 +359,10 @@ TripActive = (NOT SafetyOk)
 
 Kde:
 - `SafetyOk = SafetyRelayAuxOk AND NOT EmergencyStop`
-- `TempAlarm = DB_Alarms.TempHigh` (vypočítáno v OB Main z DB_Config.TempHighThreshold_C)
+- `TempAlarm = DB_Alarms.TempAlarm` (kombinovaný alarm: TempHighLozisko OR TempHighKartace)
+  - Vypočítáno v OB Main z DB_Config.TempHighThreshold_C (65°C)
+  - `TempHighLozisko`: AI1_RTD (teplota ložiska) > 65°C
+  - `TempHighKartace`: AI2_RTD (teplota kartáčů) > 65°C
 - `VibAlarm = DB_Alarms.VibCritical` (zatím placeholder)
 
 ### Bezpečné stavy
@@ -377,6 +383,8 @@ Kde:
    - Změna thresholdu: edituj DB_Config přímo v TIA nebo změň value v `BEGIN`.
 
 2. **SINE režim**: Generuje plný sinusový průběh s DC offsetem.
+   - **Průběh začíná od 0A**: Při vstupu do SINE režimu se fáze resetuje na `-π/2` rad
+   - Důvod: `SIN(-π/2) = -1` → `I = offset + amplitude × (-1) = 0A` (požadavek zákazníka)
    - Pokud `offset < amplitude` → PLC auto-korekta na `offset = amplitude`.
    - Výstup je vždy clampován na 0–38 A (limit zákazníka).
    - StatusText zobrazí "AUTO OFFSET" pokud byla korekta použita.

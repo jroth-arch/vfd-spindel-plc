@@ -27,7 +27,8 @@ Stav: draft, doplnit vendor PN/SN a pocty
 |---|---|---|
 | Otacky vretene | TM_Counter / HSC | IMPLEMENTOVANO |
 | Teplota loziska | AI1_RTD | IMPLEMENTOVANO |
-| Teplota uhliku | dedikovany senzor | TODO (zatim 0.0) |
+| Teplota kartacu | AI2_RTD | IMPLEMENTOVANO |
+| Teplota uhliku (pro logging) | dedikovany senzor | TODO (zatim 0.0) |
 | Vibrace | vibracni senzor | TODO (zatim 0.0) |
 
 ## 4) Komunikace a IT

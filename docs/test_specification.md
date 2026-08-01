@@ -289,7 +289,7 @@ Ucel: overit, ze se trend buffer plni a TrendWriteIdx se pohybuje dopredu.
 - LOG-01 PASS (test je aktivni).
 
 #### Pockat
-- min. 700 ms (pri SampleEveryN=2, OB30=100ms = vzorky kazdych 200ms → 3–4 vzorky)
+- min. 15s (pri SampleEveryN=6, OB30=1000ms = vzorky kazdych 6s → 2–3 vzorky)
 
 #### Over
 - `"DB_LogBuffer".TrendWriteIdx > 0`

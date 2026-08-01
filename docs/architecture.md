@@ -10,7 +10,7 @@ Tato stránka dokumentuje architekturu, stavové automaty a klíčové proměnn�
 flowchart TD
     subgraph OB["Cyklické Organization Blocky"]
         OB_Main["OB Main — hlavní cyklus"]
-        OB_TS["OB TimeSensitive — 100ms (kritické operace)"]
+        OB_TS["OB TimeSensitive — 1000ms (kritické operace)"]
     end
     
     subgraph Safety["🔴 Bezpečnostní bloky"]

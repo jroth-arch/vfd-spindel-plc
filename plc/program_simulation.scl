@@ -1218,6 +1218,16 @@ NON_RETAIN
 			EnableEmergencyStopOverride : Bool;
 			EmergencyStop : Bool;
 		END_STRUCT;
+		// === PLCSIM ADVANCED SIMULATION ===
+		SimMode : Struct
+			Enable : Bool;                    // TRUE = simulovat vsechny signaly pro testovani v PLCSim
+			AutoStartSpindle : Bool;          // TRUE = pri startu testu automaticky spust vreteno
+			SpindleSpeed_RPM : Real;          // Simulovane otacky vretene
+			TempLozisko_C : Real;             // Simulovana teplota loziska
+			TempKartace_C : Real;             // Simulovana teplota kartacu
+			TimeAcceleration : Real;          // Multiplikator casu (1.0 = real-time, 10.0 = 10x rychleji)
+			_SpindleStarted : Bool;           // Internal flag - vreteno uz bylo spusteno v tomto testu
+		END_STRUCT;
 	END_VAR
 
 BEGIN
@@ -1228,6 +1238,14 @@ BEGIN
 	InputSim.SafetyRelayAuxOk := true;
 	InputSim.EnableEmergencyStopOverride := false;
 	InputSim.EmergencyStop := false;
+	
+	// === VYCHOZI HODNOTY PRO SIMULACI ===
+	SimMode.Enable := TRUE;                   // Zapnout simulaci pro PLCSim
+	SimMode.AutoStartSpindle := TRUE;         // Automaticky spustit vreteno pri startu testu
+	SimMode.SpindleSpeed_RPM := 12000.0;      // Konstantni otacky pro simulaci
+	SimMode.TempLozisko_C := 45.0;            // Bezpecna teplota (pod 65°C)
+	SimMode.TempKartace_C := 50.0;            // Bezpecna teplota (pod 65°C)
+	SimMode.TimeAcceleration := 1.0;          // Real-time (zmenit na 10.0 pro 10x rychlejsi test)
 
 END_DATA_BLOCK
 
@@ -1703,6 +1721,38 @@ VERSION : 0.1
 
 BEGIN
 	//******************************************************************
+	// === PLCSIM ADVANCED SIMULATION ===
+	// Simulace vsech signalu pro testovani bez HW
+	//******************************************************************
+	IF "DB_Config".SimMode.Enable THEN
+		// Reset auto-start flagu pri zastaveni testu
+		IF NOT "DB_LogRuntime".TestActive THEN
+			"DB_Config".SimMode._SpindleStarted := FALSE;
+		END_IF;
+		
+		// 1. Simulace bezpecnostnich signalu (vse OK)
+		"DB_Config".InputSim.EnableSafetyRelayAuxOverride := TRUE;
+		"DB_Config".InputSim.SafetyRelayAuxOk := TRUE;
+		"DB_Config".InputSim.EnableEmergencyStopOverride := TRUE;
+		"DB_Config".InputSim.EmergencyStop := FALSE;  // FALSE = E-Stop NENI stisknut
+		"DB_IO".DI.ExternalFault := FALSE;
+		
+		// 2. Simulace teplot (konstantni hodnoty, bezpecne)
+		// Pouzivame Ohm * 10 podle konverze v FC_ConvertIO
+		"DB_IO".AI.AI1_TeplotaLoziska_Ohm := INT_TO_WORD(REAL_TO_INT("DB_Config".SimMode.TempLozisko_C * 10.0));
+		"DB_IO".AI.AI2_TeplotaKartace_Ohm := INT_TO_WORD(REAL_TO_INT("DB_Config".SimMode.TempKartace_C * 10.0));
+		
+		// 3. Auto-start vretena pri startu testu (pouze jednou)
+		IF "DB_Config".SimMode.AutoStartSpindle AND "DB_LogRuntime".TestActive THEN
+			IF NOT "DB_Config".SimMode._SpindleStarted THEN
+				"DB_HMI".Spindle.Start := TRUE;  // Trigger start pulsu
+				"DB_HMI".Spindle.Speed_RPM := "DB_Config".SimMode.SpindleSpeed_RPM;
+				"DB_Config".SimMode._SpindleStarted := TRUE;  // Oznacit, ze jsme uz startovali
+			END_IF;
+		END_IF;
+	END_IF;
+	
+	//******************************************************************
 	// IO MAP READ
 	//******************************************************************
 	"FC_IO_Map_Read"();
@@ -1713,7 +1763,7 @@ BEGIN
 	             EventAck:=FALSE,
 	             MeasuredValue => "DB_IO".TM.MeasuredValue);
 
-	// POZOR: FC_ConvertIO se volá AŽ na konci OB1, po všech FB!
+	// POZOR: FC_ConvertIO se volá AŽ na konci OB1, po simulaci otáček!
 
 	//******************************************************************
 	// CALL FB BLOCKS - PRODUCTION LOGIC
@@ -1768,6 +1818,20 @@ BEGIN
 	END_IF;
 	IF "DB_HMI".Spindle.Stop THEN
 		"DB_HMI".Spindle.Stop := FALSE;
+	END_IF;
+
+	//******************************************************************
+	// === SIMULACE OTÁČEK (až PO volání Spindel FB) ===
+	//******************************************************************
+	IF "DB_Config".SimMode.Enable THEN
+		// Simulace otacek vretene - MUSI BYT AZ PO volani Spindel FB!
+		// TM_Counter ocekava pulsy, simulujeme MeasuredValue primo
+		// Konverze: RPM = (MeasuredValue * 60) / 2, tedy MeasuredValue = (RPM * 2) / 60
+		IF "DB_Status".Spindel.RunLatched THEN
+			"DB_IO".TM.MeasuredValue := REAL_TO_DINT(("DB_Config".SimMode.SpindleSpeed_RPM * 2.0) / 60.0);
+		ELSE
+			"DB_IO".TM.MeasuredValue := 0;  // Vreteno stoji
+		END_IF;
 	END_IF;
 
 	//******************************************************************
@@ -1834,7 +1898,7 @@ BEGIN
 	END_IF;
 	
 	//******************************************************************
-	// CONVERT IO - AŽ na konci, po všech FB!
+	// CONVERT IO - AŽ na konci, po simulaci otáček!
 	//******************************************************************
 	"FC_ConvertIO"();
 	

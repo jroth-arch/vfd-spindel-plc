@@ -9,6 +9,7 @@ Cil: overit, ze PLC vytvori CSV soubor v UserFiles a zapisuje trend data.
 - SD karta je vlozena a neni write-protected.
 - Webtestapp je nasazena a otevrena na PLC.
 - Prihlaseni do webtestapp je uspesne.
+- **POZNAMKA**: Slozka `UserFiles` se vytvori automaticky pri prvnim flushu, neni treba ji vytvorit rucne.
 
 Doporucene zakladni hodnoty (zapis pred testem):
 - "DB_LogConfig".Enable = true
@@ -68,6 +69,8 @@ Krok D: kontrola flush vysledku
 
 Cesta zapisu je:
 - UserFiles/<DB_LogRuntime.FileName>
+
+**POZNAMKA**: Slozka `UserFiles` se vytvori automaticky pri prvnim flushu.
 
 Postup:
 1. Zapis si hodnotu "DB_LogRuntime".FileName.

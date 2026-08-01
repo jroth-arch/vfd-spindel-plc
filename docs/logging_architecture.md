@@ -61,7 +61,7 @@
 ## Architektura volání (PLC)
 
 ```
-OB30 (100 ms) – TimeSensitive
+OB30 (1000 ms) – TimeSensitive
   └── LogManager(...)     ← SampleEveryN_Cycles=2 → vzorkuje každých 200 ms
         ├── plní DB_LogBuffer.TrendBuffer[WriteIdx]
         ├── posunuje TrendWriteIdx (kruhový buffer, 1000 prvků)
@@ -111,9 +111,8 @@ SafetyText   : String[40]
 | Enable          | Bool        | false      | Povolení logování                              |
 | StartTest       | Bool        | false      | HMI/WebAPI trigger startu testu (hrana)        |
 | StopTest        | Bool        | false      | HMI/WebAPI trigger stopu testu (hrana)         |
-| SampleTime_ms   | Int         | 200        | Informativní (nepoužívá FB; řídí SampleEveryN) |
 | TestDuration_s  | DInt        | 86400      | Max. délka testu v sekundách                   |
-| FlushEveryN     | Int         | 100        | Počet vzorků mezi dávkovými zápisy             |
+| FlushEveryN     | Int         | 5          | Počet vzorků mezi dávkovými zápisy (test: 5, prod: 100) |
 | FilePrefix      | String[16]  | 'testlog'  | Rezervováno pro budoucí použití                |
 
 ### DB_LogRuntime (NON_RETAIN – stav za běhu)
@@ -146,7 +145,7 @@ SafetyText   : String[40]
 **Instance DB:** `"LogManager"`
 
 Klíčové parametry:
-- `SampleEveryN_Cycles` (Int, default 2): počet cyklů OB30 mezi vzorky → 2×100ms = 200ms
+- `SampleEveryN_Cycles` (Int, default 6): počet cyklů OB30 mezi vzorky → 6×1000ms = 6s
 - `FlushEveryN` (Int, default 100): každých 100 vzorků → trigger flushe každých 20 s
 - `TestDuration_s` (DInt, default 86400 = 24 hod): maximální délka testu
 
@@ -165,15 +164,16 @@ Handshake s FB_LogFlushToSd:
 
 Stavový automat (Step):
 ```
-0 IDLE      → čekání na hranu FlushRequest
-1 PREPARE   → výpočet dostupných řádků, snapshot ReadIdx
-2 OPEN      → FileOpen (APP mode – vytvoří nebo appenduje)
-3 WR_HEADER → zapsat CSV hlavičku (jen pokud HeaderWritten = FALSE)
-4 WR_ROW    → FileWrite jednoho řádku (čeká DONE)
-5 NEXT_ROW  → posun indexu; pokud RowsDone < RowsToFlush → zpět na 4, jinak → 6
-6 CLOSE     → FileClose
-7 ACK       → posun TrendReadIdx, AckFlush=TRUE na jeden cyklus, → IDLE
-10 ERROR    → retry (max RetryLimit), pak Error=TRUE
+0 IDLE       → čekání na hranu FlushRequest
+1 PREPARE    → výpočet dostupných řádků, snapshot ReadIdx
+11 CREATE_DIR → vytvoření složky UserFiles/ (jen při prvním flushu, pokud neexistuje)
+2 OPEN       → FileOpen (APP mode – vytvoří nebo appenduje)
+3 WR_HEADER  → zapsat CSV hlavičku (jen pokud HeaderWritten = FALSE)
+4 WR_ROW     → FileWrite jednoho řádku (čeká DONE)
+5 NEXT_ROW   → posun indexu; pokud RowsDone < RowsToFlush → zpět na 4, jinak → 6
+6 CLOSE      → FileClose
+7 ACK        → posun TrendReadIdx, AckFlush=TRUE na jeden cyklus, → IDLE
+10 ERROR     → retry (max RetryLimit), při chybě 0x7001 zkusí CREATE_DIR, pak Error=TRUE
 ```
 
 Vstup `FinalFlush = TRUE` (při stopu/timeoutu): zapisuje VŠECHNY dostupné řádky bez omezení MaxRowsPerFlush.
@@ -190,10 +190,11 @@ Výstup: String[250] – jeden CSV řádek zakončený CRLF
 
 ## Souborová konvence na SD kartě
 
-- **Cesta:** `/<FileName>` (root paměťové karty)
+- **Cesta:** `UserFiles/<FileName>` (složka UserFiles na paměťové kartě)
 - **Formát jména:** `YYYYMMDD-HHMMSS.csv` (z doby startu testu, RD_SYS_T při StartTest hraně)
 - **Otevírání:** `APP` mode – jeden soubor per test, každý flush appenduje
 - **Strategie:** open → (header?) → write batch → close – per každý flush
+- **Automatické vytvoření složky:** Složka `UserFiles/` se vytvoří automaticky při prvním flushu pomocí pomocného souboru `.keepdir`
 
 ---
 

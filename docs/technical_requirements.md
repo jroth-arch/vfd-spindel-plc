@@ -7,11 +7,11 @@ Nadrazeny dokument: [user_specification.md](user_specification.md)
 ## 1) PLC architektura
 
 TR-PLC-01 Ridici smycky
-- OB30 (100 ms, TimeSensitive): casove citlive operace – LabPSU, vzorkovani dat (LogManager).
+- OB30 (1000 ms, TimeSensitive): casove citlive operace – LabPSU, vzorkovani dat (LogManager).
 - OB1 (Main): necasovekriticky zpracovani – flush bufferu na SD, mapovani IO, logika HMI.
 
 TR-PLC-02 Oddeleni vzorkovani a zapisu
-- LogManager vzorkuje kazdych SampleEveryN_Cycles cyklu OB30 (default 2 = 200 ms).
+- LogManager vzorkuje kazdych SampleEveryN_Cycles cyklu OB30 (hardcoded 6 cyklu = 6s, OB30=1s).
 - Zapis na SD probiha pouze v OB1, nikdy v OB30, aby neblokoval casove citlivou logiku.
 
 TR-PLC-03 Kruhovy buffer
@@ -73,9 +73,8 @@ TR-DB-01 DB_LogConfig (konfiguracia, NON_RETAIN)
 | Enable          | Bool         | false     | Povoleni logovani                       |
 | StartTest       | Bool         | false     | HMI trigger startu (hrana)              |
 | StopTest        | Bool         | false     | HMI trigger stopu (hrana)               |
-| SampleEveryN    | Int          | 2         | Pocet cyklu OB30 mezi vzorky            |
 | TestDuration_s  | DInt         | 86400     | Max. delka testu v sekundach            |
-| FlushEveryN     | Int          | 100       | Pocet vzorku mezi flushy                |
+| FlushEveryN     | Int          | 5         | Pocet vzorku mezi flushy (test: 5, prod: 100) |
 | FilePrefix      | String[16]   | 'testlog' | Prefix nazvu souboru (pro budouci pouziti) |
 
 TR-DB-02 DB_LogRuntime (stavove hodnoty za behu, NON_RETAIN)

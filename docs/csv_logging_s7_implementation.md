@@ -13,7 +13,8 @@ This document describes the implementation of CSV logging to the SD card on Siem
 ## File Naming
 - The file name is generated in the PLC as `DB_LogRuntime.FileName`, e.g. `20260518-153012.csv`.
 - Each test run generates a new file name before logging starts.
-- Files are stored in the root directory of the SD card (default: `/`), or a subfolder if configured.
+- Files are stored in the `UserFiles/` subfolder on the SD card.
+- **IMPORTANT**: The `UserFiles/` folder is automatically created by the PLC on the first flush if it does not exist.
 
 ## Logging Sequence (State Machine)
 1. **STEP_OPEN**
@@ -79,6 +80,7 @@ FileClose_1(
 - If the SD card is missing or full, file operations will return an error in `Status`.
 - Always close the file after writing to avoid data loss.
 - If a flush fails, increment `FlushErrorCount` and set `LastFlushOk := FALSE`.
+- The `UserFiles/` folder is automatically created on first flush - no manual setup required.
 
 ## References
 - Siemens S7-1500 System Manual: File Operations

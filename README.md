@@ -136,6 +136,21 @@ Během provádění testů jsou monitorovány následující bezpečnostní sign
 
 > **Poznámka:** Signály označené jako aktivní LOW (0) spouští bezpečnostní reakci, když je signál nepravdivý/nízký. Signály označené jako aktivní HIGH (1) spouští bezpečnostní reakci, když je signál pravdivý/vysoký.
 
+## Testování a simulace
+
+### PLCSim Advanced Testing
+- **[PLCSim Advanced + WinCC Runtime - Kompletní návod](docs/plcsim_advanced_testing_guide.md)** - Testování CSV logování v simulátoru bez HW
+- [Simulační režim](docs/simulation_mode_guide.md) - Časová akcelerace pro rychlé testování
+- [Test specifikace](docs/test_specification.md) - Automatizované testy logovací funkcionality (webtestapp)
+- [Webtestapp logging test script](docs/webtestapp_logging_test_script.md) - Manuální test script pro validaci CSV logu
+
+### Dokumentace logování
+- [Logging architecture](docs/logging_architecture.md) - Architektura systému logování
+- [Logging diagnostic guide](docs/logging_diagnostic_guide.md) - Diagnostika a řešení problémů
+- [CSV logging S7 implementation](docs/csv_logging_s7_implementation.md) - Implementační detaily
+
+---
+
 ## Appendix 1 – Sequence diagram (Mermaid)
 
 ```mermaid

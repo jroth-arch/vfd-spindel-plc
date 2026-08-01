@@ -115,7 +115,7 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 ```
 "DB_HMI".Spindle.Speed_RPM := 16000.0           // Cílové otáčky
 "DB_LogConfig".TestDuration_s := 3600           // 1 hodina
-"DB_LogConfig".FlushEveryN := 100               // Flush každých 100 vzorků
+"DB_LogConfig".FlushEveryN := 5                 // Flush každých 5 vzorků (testovací, prod: 100)
 "DB_LogConfig".FilePrefix := 'test_001'         // Prefix souboru
 
 // LabPSU parametry podle zvoleného režimu

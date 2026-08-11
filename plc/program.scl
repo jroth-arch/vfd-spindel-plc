@@ -56,42 +56,40 @@ FUNCTION_BLOCK "FB_LogManager"
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
 	VAR_INPUT
-		Enable : Bool;
-		StartTest : Bool;
-		StopTest : Bool;
-		RPM : Real;
-		T_Lozisko : Real;
-		T_Uhliky : Real;
-		Vibrace : Real;
-		ProudUhliky : Real;
-		State : USInt;
-		RunLatched : Bool;
-		TripActive : Bool;
-		TripCode : USInt;
-		SafetyText : String[40];
-		// SampleEveryN_Cycles: kolikrat se OB30 zavola nez se ulozi 1 vzorek
-		// Pr.: OB30 = 1000ms, SampleEveryN = 6 -> vzorkovani kazdych 6s
-		SampleEveryN_Cycles : Int := 6;
-		TestDuration_s : DInt := 86400;
-		FlushEveryN : Int := 5;  // TESTOVACI NASTAVENI (prod: 100)
-		AckFlush : Bool;   // vstup od FB_LogFlushToSd – potvrzeni flushe, resetuje FlushPending
+		Enable : Bool;                     // povoleni logovani (z DB_LogConfig.Enable)
+		StartTest : Bool;                  // hrana = start testu (z DB_LogConfig.StartTest)
+		StopTest : Bool;                   // hrana = manual stop testu (z DB_LogConfig.StopTest)
+		RPM : Real;                        // aktualni otacky vretene [RPM]
+		T_Lozisko : Real;                  // teplota loziska [degC]
+		T_Uhliky : Real;                   // teplota uhliku/kartacu [degC] – zatim 0.0
+		Vibrace : Real;                    // vibrace – zatim 0.0
+		ProudUhliky : Real;                // proud do uhliku [A], prepocitany z AQ1_CurrentCtrl_V
+		State : USInt;                     // stav vretene: 0=STOP 1=RUN 2=STOPPING 3=TRIP
+		RunLatched : Bool;                 // vreteno v provozu (latch z FB_DriveCtrl)
+		TripActive : Bool;                 // safety trip aktivni
+		TripCode : USInt;                  // kod tripu: 0=OK 1=ESTOP 2=RELAY 3=EXT 4=TEMP 5=VIB 6=DISABLE
+		SafetyText : String[40];           // textova diagnostika safety brany
+		SampleEveryN_Cycles : Int := 6;    // pocet cyklu OB30 mezi vzorky → 6×1s = 6s/vzorek
+		TestDuration_s : DInt := 1814400;  // max delka testu [s] – timeout vypnut, beha do manualniko stopu
+		FlushEveryN : Int := 5;            // pocet vzorku pred flushem: 5=test (30s), 100=produkce (10min)
+		AckFlush : Bool;                   // potvrzeni flushe od FB_LogFlushToSd → resetuje FlushPending
 	END_VAR
 
 	VAR_OUTPUT
-		FlushPending : Bool;       // TRUE = buffer ma dost dat -> Main muze zapsat na SD
-		TestTimeoutReached : Bool; // TRUE = test uplynul
-		CyclesProcessed : DInt;    // Diagnostika - kolik cyklu bylo zpracovano
-		LastFlushTrigger : USInt;  // Diagnostika - co spustilo flush (1=periodic, 2=stop, 3=timeout)
-		EdgeStopDetected : Bool;   // Diagnostika - byla detekována hrana StopTest?
-		EdgeStartDetected : Bool;  // Diagnostika - byla detekována hrana StartTest?
+		FlushPending : Bool;       // TRUE = buffer ma dost dat → OB1 ma zapsat na SD
+		TestTimeoutReached : Bool; // TRUE = test dosahl TestDuration_s (logika vypnuta)
+		CyclesProcessed : DInt;    // pocet OB30 cyklu zpracovanych behem testu
+		LastFlushTrigger : USInt;  // co spustilo posledni flush: 1=periodic 2=manual stop 3=timeout
+		EdgeStopDetected : Bool;   // prave detekovan StopTest puls (jeden OB30 cyklus)
+		EdgeStartDetected : Bool;  // prave detekovan StartTest puls (jeden OB30 cyklus)
 	END_VAR
 
 	VAR
 		prevStartTest : Bool := FALSE;
 		prevStopTest : Bool := FALSE;
-		prevAckFlush : Bool := FALSE;
 		cycleCounter : Int := 0;
 		flushCounter : Int := 0;
+		StopReason : USInt := 0;  // 0=running, 1=manual stop, 2=timeout, 3=trip/fault
 	END_VAR
 
 	VAR_TEMP
@@ -179,6 +177,9 @@ BEGIN
 		"DB_LogRuntime".HeaderWritten := FALSE;
 		"DB_LogRuntime".FlushErrorCount := 0;
 		"DB_LogRuntime".LastFlushOk := FALSE;  // Jeste neprobehl zadny flush
+		"DB_LogRuntime".MaxTempLozisko_C := 0.0;  // Reset max teploty pri startu testu
+		"DB_LogRuntime".MaxTempUhliky_C := 0.0;   // Reset max teploty pri startu testu
+		StopReason := 0;  // Reset stop reason - test běží
 		// (event log: TEST_START)
 	END_IF;
 
@@ -186,6 +187,7 @@ BEGIN
 	IF Enable AND (StopTest AND NOT prevStopTest) THEN
 		EdgeStopDetected := TRUE;  // Diagnostika
 		"DB_LogRuntime".TestActive := FALSE;
+		StopReason := 1;  // Manual stop
 		FlushPending := TRUE;   // finalni flush pri manuálním stopu
 		LastFlushTrigger := 2;  // manual stop flush
 		// (event log: TEST_STOP)
@@ -195,10 +197,11 @@ BEGIN
 	prevStopTest := StopTest;
 
 	// Handshake: FB_LogFlushToSd potvrdil flush -> resetovat FlushPending
-	IF AckFlush AND NOT prevAckFlush THEN
+	// AckFlush zustane TRUE dokud FlushPending neklesne (4-way handshake)
+	IF AckFlush THEN
 		FlushPending := FALSE;
+		flushCounter := 0;  // Reset counter az PO dokonceni flush-u
 	END_IF;
-	prevAckFlush := AckFlush;
 
 	// Cyklické vzorkování pouze pokud test běží
 	IF Enable AND "DB_LogRuntime".TestActive THEN
@@ -236,6 +239,16 @@ BEGIN
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripActive := TripActive;
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripCode := TripCode;
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].SafetyText := SafetyText;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TestActive := "DB_LogRuntime".TestActive;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].StopReason := StopReason;
+
+			// Update maximalni teploty behem testu
+			IF T_Lozisko > "DB_LogRuntime".MaxTempLozisko_C THEN
+				"DB_LogRuntime".MaxTempLozisko_C := T_Lozisko;
+			END_IF;
+			IF T_Uhliky > "DB_LogRuntime".MaxTempUhliky_C THEN
+				"DB_LogRuntime".MaxTempUhliky_C := T_Uhliky;
+			END_IF;
 
 			// Posun indexu (kruhový buffer)
 			"DB_LogBuffer".TrendWriteIdx := "DB_LogBuffer".TrendWriteIdx + 1;
@@ -246,21 +259,21 @@ BEGIN
 
 			// FlushPending: Main vi, ze je cas zapsat na SD
 			flushCounter := flushCounter + 1;
-			IF flushCounter >= FlushEveryN THEN
-				flushCounter := 0;
+			IF flushCounter >= FlushEveryN AND NOT FlushPending THEN
 				FlushPending := TRUE;
 				LastFlushTrigger := 1;  // periodic flush
 			END_IF;
 		END_IF;
 
-		// Konec testu po uplynutí času
-		IF "DB_LogRuntime".Elapsed_s >= DINT_TO_REAL(TestDuration_s) THEN
-			"DB_LogRuntime".TestActive := FALSE;
-			TestTimeoutReached := TRUE;
-			FlushPending := TRUE;   // posledni flush
-			LastFlushTrigger := 3;  // timeout flush
-			// (event log: TEST_END_TIMEOUT)
-		END_IF;
+		// Konec testu po uplynutí času - VYPNUTO (test bezi do nekonecna, az do manualniho stopu)
+		// IF "DB_LogRuntime".Elapsed_s >= DINT_TO_REAL(TestDuration_s) THEN
+		// 	"DB_LogRuntime".TestActive := FALSE;
+		// 	StopReason := 2;  // Timeout
+		// 	TestTimeoutReached := TRUE;
+		// 	FlushPending := TRUE;   // posledni flush
+		// 	LastFlushTrigger := 3;  // timeout flush
+		// 	// (event log: TEST_END_TIMEOUT)
+		// END_IF;
 		
 		CyclesProcessed := CyclesProcessed + 1;  // Diagnostika
 	END_IF;
@@ -291,6 +304,8 @@ VERSION : 0.1
 		TripActive : Bool;
 		TripCode : USInt;
 		SafetyText : String[40];
+		TestActive : Bool;    // TRUE = test běží, FALSE = test byl zastaven
+		StopReason : USInt;   // 0=běží, 1=manual stop, 2=timeout, 3=trip/fault
 	END_STRUCT;
 END_TYPE
 
@@ -350,6 +365,16 @@ BEGIN
 	line := CONCAT(IN1 := line, IN2 := USINT_TO_STRING(Rec.TripCode));
 	line := CONCAT(IN1 := line, IN2 := ',');
 	line := CONCAT(IN1 := line, IN2 := Rec.SafetyText);
+	line := CONCAT(IN1 := line, IN2 := ',');
+
+	IF Rec.TestActive THEN
+		line := CONCAT(IN1 := line, IN2 := '1');
+	ELSE
+		line := CONCAT(IN1 := line, IN2 := '0');
+	END_IF;
+
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := USINT_TO_STRING(Rec.StopReason));
 
 	#FC_LogRecordToCsv := #line;
 END_FUNCTION
@@ -359,40 +384,43 @@ DATA_BLOCK "DB_LogConfig"
 VERSION : 0.1
 NON_RETAIN
 	VAR
-		Enable : Bool;
-		StartTest : Bool;   // nastavit true pres HMI/Web API pro spusteni testu (hrana)
-		StopTest : Bool;    // nastavit true pres HMI/Web API pro zastaveni testu (hrana)
-		TestDuration_s : DInt;
-		FlushEveryN : Int;
-		FilePrefix : String[16];
+		Enable : Bool;             // TRUE = logovani povoleno (default TRUE)
+		StartTest : Bool;          // HMI/WebAPI: nastav TRUE pro start testu (hrana, auto-reset OB30)
+		StopTest : Bool;           // HMI/WebAPI: nastav TRUE pro manual stop testu (hrana, auto-reset OB30)
+		TestDuration_s : DInt;     // max delka testu [s] – default 1814400 = 3 tydny
+		FlushEveryN : Int;         // flush kazdych N vzorku – default 5 (30s), prod 100 (10min)
+		FilePrefix : String[16];   // rezerva pro pojmenovani souboru (zatim nevyuzito)
 	END_VAR
 BEGIN
-	Enable := false;
+	Enable := TRUE;
 	StartTest := false;
 	StopTest := false;
-	TestDuration_s := 86400;
+	TestDuration_s := 1814400;  // 3 tydny = 21 dni = 504 hodin
 	FlushEveryN := 5;  // TESTOVACI NASTAVENI (prod: 100)
 	FilePrefix := 'testlog';
 END_DATA_BLOCK
 
 DATA_BLOCK "DB_LogRuntime"
 { S7_Optimized_Access := 'TRUE' }
-VERSION : 0.1
+VERSION : 0.2
 NON_RETAIN
 	VAR
-		TestActive : Bool;
-		TestStartTs : Date_And_Time;
-		Elapsed_s : Real;
-		SampleCounter : DInt;
-		LastFlushOk : Bool;
-		LastError : String[40];
-		FileName : String[32];        // generovano pri startu testu: YYYYMMDD-HHMMSS.csv
-		HeaderWritten : Bool;         // TRUE = CSV hlavicka jiz zapsana do aktualniho souboru
-		FlushErrorCount : Int;        // pocet chyb flushe od posledniho startu testu
+		TestActive : Bool;             // TRUE = test probiha (sleduj pro zahajeni mereni)
+		TestStartTs : Date_And_Time;   // cas startu testu (RD_SYS_T pri StartTest hrane)
+		Elapsed_s : Real;              // uplynuly cas od startu testu [s], aktualizuje se kazdych 6s
+		SampleCounter : DInt;          // celkovy pocet vzorku zapsanych do bufferu od startu
+		LastFlushOk : Bool;            // TRUE = posledni flush na SD probehl bez chyby
+		LastError : String[40];        // text posledni chyby flushe (FileWriteC status kod)
+		FileName : String[32];         // nazev aktualniho log souboru (LOG_YYMMDD_HHMMSS.csv)
+		HeaderWritten : Bool;          // TRUE = CSV hlavicka uz zapsana do souboru
+		FlushErrorCount : Int;         // pocet chyb flushe od posledniho startu (alarm >0)
 		// HMI display strings (formatted time)
-		ElapsedTime_HMI : String[9];  // Formatted "HHH:MM:SS" pro zobrazeni na HMI (max 999h)
-		TargetTime_HMI : String[9];   // Formatted target time "HHH:MM:SS"
-		TimeDisplay_HMI : String[21]; // Combined "HHH:MM:SS / HHH:MM:SS" (optional - for single field display)
+		ElapsedTime_HMI : String[9];   // HMI zobrazeni uplynuteho casu "HHH:MM:SS" (max 999h)
+		TargetTime_HMI : String[9];    // HMI zobrazeni ciloveho casu "HHH:MM:SS"
+		TimeDisplay_HMI : String[21];  // HMI jedno pole: "HHH:MM:SS / HHH:MM:SS"
+		// Maximalni teploty behem testu
+		MaxTempLozisko_C : Real;       // max teplota loziska od startu testu [degC]
+		MaxTempUhliky_C : Real;        // max teplota uhliku/kartacu od startu testu [degC]
 	END_VAR
 BEGIN
 	TestActive := false;
@@ -406,6 +434,8 @@ BEGIN
 	ElapsedTime_HMI := '000:00:00';
 	TargetTime_HMI := '000:00:00';
 	TimeDisplay_HMI := '000:00:00 / 000:00:00';
+	MaxTempLozisko_C := 0.0;
+	MaxTempUhliky_C := 0.0;
 END_DATA_BLOCK
 
 DATA_BLOCK "DB_LogBuffer"
@@ -413,12 +443,12 @@ DATA_BLOCK "DB_LogBuffer"
 VERSION : 0.1
 NON_RETAIN
 	VAR
-		TrendBuffer : ARRAY[0..999] OF "UDT_LogRecord";
-		EventBuffer : ARRAY[0..99] OF "UDT_EventRecord";
-		TrendWriteIdx : Int;
-		TrendReadIdx : Int;
-		EventWriteIdx : Int;
-		EventReadIdx : Int;
+		TrendBuffer : ARRAY[0..999] OF "UDT_LogRecord";   // kruhovy buffer vzorku (1000 polozek × 6s = 100 min)
+		EventBuffer : ARRAY[0..99] OF "UDT_EventRecord";  // buffer eventu (faze 3)
+		TrendWriteIdx : Int;   // index zapisu (LogManager) – sleduj pro debug plneni bufferu
+		TrendReadIdx : Int;    // index cteni/flushe (LogFlushToSd) – WriteIdx-ReadIdx = neprectenych radku
+		EventWriteIdx : Int;   // index zapisu eventu
+		EventReadIdx : Int;    // index cteni eventu
 	END_VAR
 BEGIN
 	TrendWriteIdx := 0;
@@ -432,43 +462,45 @@ DATA_BLOCK "DB_HMI"
 VERSION : 0.1
 NON_RETAIN
    VAR 
-      Sensors { S7_SetPoint := 'False'} : "UDT_SENSORS";
+      Sensors { S7_SetPoint := 'False'} : "UDT_SENSORS";   // AI hodnoty po prepoctu (teploty degC, RPM)
       System : Struct
-         Enable : Bool;
+         Enable : Bool;   // rezerva pro systemove povoleni
       END_STRUCT;
       Spindle : Struct
-         Start : Bool;
-         Stop : Bool;
-         ResetFault : Bool;
-         Speed_RPM : Real;
-         Enable : Bool;
+         Start : Bool;    // HMI puls start vretene (auto-reset v OB1)
+         Stop : Bool;     // HMI puls stop vretene (auto-reset v OB1)
+         ResetFault : Bool;  // HMI puls reset chyby meniče
+         Speed_RPM : Real;   // zadane otacky vretene [RPM] – max 18000
+         Enable : Bool;      // rezerva
       END_STRUCT;
       LabPSU : Struct
-         Enable : Bool;
-			Cycle_s : Real;
-			Mode : USInt;
-			BaseVoltage_V : Real;
-			DebugAmplitude_A : Real;
-			DebugPeriod_min : Real;
-			CurrentOffset_A : Real;
-			ConstCurrent_A : Real;
-			MaxCurrent_A : Real;
-			CurrentLimitExceeded : Bool;
+         Enable : Bool;            // povoleni laboratorniho zdroje (auto-set pri StartTest)
+			Cycle_s : Real;           // perioda OB30 [s] – default 1.0
+			Mode : USInt;             // rezim zdroje: 0=OFF 1=CONST 2=SINE_DEBUG
+			BaseVoltage_V : Real;     // napeti zdroje [V] – default 2.0
+			DebugAmplitude_A : Real;  // amplituda sinusoidy [A] – default 5.0
+			DebugPeriod_min : Real;   // perioda sinusoidy [min] – default 1.0 min
+			CurrentOffset_A : Real;   // DC offset proudu [A] – min = DebugAmplitude_A
+			ConstCurrent_A : Real;    // proud v CONST rezimu [A] – default 10.0
+			MaxCurrent_A : Real;      // maximalni povoleny proud [A] – default 38.0
+			CurrentLimitExceeded : Bool;  // TRUE = zadany proud prekrocil MaxCurrent_A
+			SineCycleCounter : UDInt;     // pocet dokoncenych period sinusoidy od startu
       END_STRUCT;
    END_VAR
 
 
 BEGIN
 	LabPSU.Enable := false;
-	LabPSU.Cycle_s := 1.0;  // OB30 = 1000ms = 1s (optimalizace CPU)
-	LabPSU.Mode := 1;
+	LabPSU.Cycle_s := 1.0;  // OB30 = 1000ms = 1s
+	LabPSU.Mode := 2;  // 2 = SINE_DEBUG (sinusova modulace)
 	LabPSU.BaseVoltage_V := 2.0;
 	LabPSU.DebugAmplitude_A := 5.0;
-	LabPSU.DebugPeriod_min := 10.0;
+	LabPSU.DebugPeriod_min := 1.0;  // 1 minuta perioda
 	LabPSU.CurrentOffset_A := 5.0;
-	LabPSU.ConstCurrent_A := 2.0;
+	LabPSU.ConstCurrent_A := 10.0;  // 10 A pro CONST rezim
 	LabPSU.MaxCurrent_A := 38.0;
 	LabPSU.CurrentLimitExceeded := false;
+	LabPSU.SineCycleCounter := 0;
 
 END_DATA_BLOCK
 
@@ -621,6 +653,7 @@ VERSION : 0.1
       State : USInt := 0;   // 0 OFF, 1 CONST, 2 SINE
       StatusText : String[40] := '';
       CurrentLimitExceeded : Bool := false;   // indikator, ze uzivatel zkusil zadat vyssi proud nez limit
+      SineCycleCounter : UDInt := 0;   // pocet dokoncenych period sinusovky (pro HMI)
    END_VAR
 
    VAR 
@@ -711,6 +744,7 @@ BEGIN
 	        // Pri prvnim vstupu do SINE rezimu resetovat fazi na -pi/2, aby prubeh zacinali od 0A
 	        IF #prevMode <> 2 THEN
 	            #phase_rad := -1.5707963;  // -pi/2 rad, aby SIN(-pi/2) = -1 -> proud = offset - amplitude = 0A
+	            #SineCycleCounter := 0;  // reset pocitadla cyklu pri vstupu do SINE rezimu
 	        END_IF;
 	        
 	        // Vypocet omega z periody v minutach: omega = 2*pi / (T_min * 60)
@@ -723,9 +757,10 @@ BEGIN
 	        
 	        #phase_rad := #phase_rad + (#omega * #Cycle_s);
 	        
-	        // drzet fazi v rozumnem rozsahu
+	        // drzet fazi v rozumnem rozsahu a pocitat dokoncene periody
 	        IF #phase_rad > 6.2831853 THEN
 	            #phase_rad := #phase_rad - 6.2831853;
+	            #SineCycleCounter := #SineCycleCounter + 1;  // dokoncena jedna perioda
 	        END_IF;
 	        
 	        #sineValue := SIN(#phase_rad);
@@ -1193,10 +1228,10 @@ DATA_BLOCK "DB_Alarms"
 VERSION : 0.1
 NON_RETAIN
    VAR 
-      TempHighLozisko : Bool;
-      TempHighKartace : Bool;
-      TempAlarm : Bool;   // Kombinovany alarm (Lozisko OR Kartace)
-      VibCritical : Bool;
+      TempHighLozisko : Bool;   // TRUE = teplota loziska > TempHighThreshold_C
+      TempHighKartace : Bool;   // TRUE = teplota kartacu > TempHighThreshold_C
+      TempAlarm : Bool;         // TRUE = TempHighLozisko OR TempHighKartace → trip
+      VibCritical : Bool;       // TRUE = kritické vibrace (senzor zatim nezapojen)
    END_VAR
 
 
@@ -1209,14 +1244,20 @@ DATA_BLOCK "DB_Config"
 VERSION : 0.1
 NON_RETAIN
 	VAR
-		TempHighThreshold_C : Real;
-		VibCriticalThreshold : Real;
-		DAC_MaxDacRange : Int;
+		TempHighThreshold_C : Real;   // prahova teplota alarmu [degC] – default 65.0
+		VibCriticalThreshold : Real;  // prahova hodnota vibraci – default 0.0 (senzor nezapojen)
+		DAC_MaxDacRange : Int;        // max hodnota DAC pro 10V (S7-1200) – default 27648
 		InputSim : Struct
-			EnableSafetyRelayAuxOverride : Bool;
-			SafetyRelayAuxOk : Bool;
-			EnableEmergencyStopOverride : Bool;
-			EmergencyStop : Bool;
+			EnableSafetyRelayAuxOverride : Bool;   // SIM: TRUE = pouzij SafetyRelayAuxOk misto fyzickeho DI0
+			SafetyRelayAuxOk : Bool;               // SIM default TRUE – simuluje OK safety rele (PermitMotion=TRUE)
+			EnableEmergencyStopOverride : Bool;    // SIM: TRUE = pouzij EmergencyStop misto fyzickeho DI1
+			EmergencyStop : Bool;                  // SIM default FALSE – simuluje uvolneny E-Stop (bez tripu)
+			EnableRPM_Sim : Bool;                  // SIM: TRUE = pouzij SimRPM misto TM_Counter
+			SimRPM : Real;                         // SIM default 12000.0 RPM (max 18000)
+			EnableTempLozisko_Sim : Bool;          // SIM: TRUE = pouzij SimTempLozisko_C misto AI1_RTD
+			SimTempLozisko_C : Real;               // SIM default 35.0 degC (alarm >65 degC)
+			EnableTempKartace_Sim : Bool;          // SIM: TRUE = pouzij SimTempKartace_C misto AI2_RTD
+			SimTempKartace_C : Real;               // SIM default 40.0 degC (alarm >65 degC)
 		END_STRUCT;
 	END_VAR
 
@@ -1228,6 +1269,12 @@ BEGIN
 	InputSim.SafetyRelayAuxOk := true;
 	InputSim.EnableEmergencyStopOverride := false;
 	InputSim.EmergencyStop := false;
+	InputSim.EnableRPM_Sim := false;
+	InputSim.SimRPM := 12000.0;
+	InputSim.EnableTempLozisko_Sim := false;
+	InputSim.SimTempLozisko_C := 35.0;
+	InputSim.EnableTempKartace_Sim := false;
+	InputSim.SimTempKartace_C := 40.0;
 
 END_DATA_BLOCK
 
@@ -1236,9 +1283,21 @@ FUNCTION "FC_ConvertIO" : Void
 VERSION : 0.1
 
 BEGIN
-	"DB_HMI".Sensors.AI1_Teplota_Lozisko_C := "DB_IO".AI.AI1_TeplotaLoziska_Ohm / 10.0;
-	"DB_HMI".Sensors.AI2_Teplota_Kartace_C := "DB_IO".AI.AI2_TeplotaKartace_Ohm / 10.0;
-	"DB_HMI".Sensors.TM_Rotation_A_Channel := ("DB_IO".TM.MeasuredValue * 60) / 2;
+	IF "DB_Config".InputSim.EnableTempLozisko_Sim THEN
+		"DB_HMI".Sensors.AI1_Teplota_Lozisko_C := "DB_Config".InputSim.SimTempLozisko_C;
+	ELSE
+		"DB_HMI".Sensors.AI1_Teplota_Lozisko_C := "DB_IO".AI.AI1_TeplotaLoziska_Ohm / 10.0;
+	END_IF;
+	IF "DB_Config".InputSim.EnableTempKartace_Sim THEN
+		"DB_HMI".Sensors.AI2_Teplota_Kartace_C := "DB_Config".InputSim.SimTempKartace_C;
+	ELSE
+		"DB_HMI".Sensors.AI2_Teplota_Kartace_C := "DB_IO".AI.AI2_TeplotaKartace_Ohm / 10.0;
+	END_IF;
+	IF "DB_Config".InputSim.EnableRPM_Sim THEN
+		"DB_HMI".Sensors.TM_Rotation_A_Channel := "DB_Config".InputSim.SimRPM;
+	ELSE
+		"DB_HMI".Sensors.TM_Rotation_A_Channel := ("DB_IO".TM.MeasuredValue * 60) / 2;
+	END_IF;
 END_FUNCTION
 
 FUNCTION "FC_IO_Map_Write" : Void
@@ -1299,20 +1358,20 @@ FUNCTION_BLOCK "FB_LogFlushToSd"
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
 	VAR_INPUT
-		Enable : Bool;
-		FlushRequest : Bool;       // z LogManager.FlushPending
-		FinalFlush : Bool;         // TRUE = zapsat vse (pri stopu/timeoutu)
-		MaxRowsPerFlush : Int := 50;
-		RetryLimit : Int := 3;
+		Enable : Bool;                    // povoleni flushe (z DB_LogConfig.Enable)
+		FlushRequest : Bool;              // pozadavek na flush (z LogManager.FlushPending)
+		FinalFlush : Bool;                // TRUE = zapsat vse bez limitu (pri manual stopu)
+		MaxRowsPerFlush : Int := 50;      // max radku na jeden flush (50 = ~5s pri 10 FileWriteC/s)
+		RetryLimit : Int := 3;            // max pokusu po chybe pred nastavenim Error=TRUE
 	END_VAR
 
 	VAR_OUTPUT
-		Busy : Bool;
-		AckFlush : Bool;           // 1 cyklus TRUE po dokonceni
-		Error : Bool;
-		ErrorCode : Word;
-		CurrentStep : USInt;       // Diagnostika - aktualni krok
-		RowsFlushed : Int;         // Diagnostika - kolik radku bylo zapsano
+		Busy : Bool;               // TRUE = flush probiha (stavovy automat mimo IDLE)
+		AckFlush : Bool;           // potvrzeni flushe pro LogManager (drzi TRUE dokud FlushRequest neklesne)
+		Error : Bool;              // TRUE = flush selhal po vsech retry pokusech
+		ErrorCode : Word;          // posledni FileWriteC status kod (napr. 0x7001=soubor neexistuje)
+		CurrentStep : USInt;       // aktualni krok automatu: 0=IDLE 1=PREP 2=OPEN 3=HDR 4=ROW 5=NEXT 6=CLOSE 7=ACK 10=ERR 11=MKDIR
+		RowsFlushed : Int;         // pocet radku zapsanych pri poslednim flushu
 	END_VAR
 
 	VAR
@@ -1362,7 +1421,7 @@ VERSION : 0.1
 	END_VAR
 
 BEGIN
-	AckFlush := FALSE;
+	// AckFlush is NOT reset here – STEP_IDLE holds it until FlushRequest drops (4-way handshake)
 	CurrentStep := Step;  // Diagnostika - exportovat aktualni krok
 
 	CASE Step OF
@@ -1371,6 +1430,10 @@ BEGIN
 			Error := FALSE;
 			writeReq := FALSE;
 			writeStarted := FALSE;
+			// Hold AckFlush TRUE until FlushRequest drops so OB30 (1000ms) can see it
+			IF NOT FlushRequest THEN
+				AckFlush := FALSE;
+			END_IF;
 			IF Enable AND (FlushRequest AND NOT prevFlushReq) THEN
 				Busy := TRUE;
 				Step := STEP_PREPARE;
@@ -1439,10 +1502,18 @@ BEGIN
 			ELSIF fwError THEN
 				// Chyba pri vytvareni - pokracuj dale, mozna slozka uz existuje
 				// Nebo to zkus bez slozky
-				IF FileStatus = 16#7002 OR FileStatus = 16#0000 THEN
-					// 0x7002 = uz existuje nebo jina bezna chyba - to je OK
+				IF FileStatus = 16#7002 OR FileStatus = 16#0000 OR FileStatus = 16#7000 THEN
+					// 0x7002 = uz existuje, 0x7000 = generic warning - to je OK
 					dirCreated := TRUE;
 				END_IF;
+				dirCreateStarted := FALSE;
+				writeStarted := FALSE;
+				Step := STEP_OPEN;
+			ELSIF NOT fwBusy AND dirCreateStarted THEN
+				// FileWriteC skoncil (Busy=FALSE) ale nenastavil Done ani Error
+				// Tento stav muze nastat pri 16#7000 (warning misto error)
+				// Pokracuj dale, pravdepodobne slozka existuje
+				dirCreated := TRUE;
 				dirCreateStarted := FALSE;
 				writeStarted := FALSE;
 				Step := STEP_OPEN;
@@ -1465,7 +1536,7 @@ BEGIN
 
 		STEP_WR_HEADER:
 			IF NOT writeStarted THEN
-				CsvLine := 't_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,State,RunLatched,TripActive,TripCode,SafetyText';
+				CsvLine := 't_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,State,RunLatched,TripActive,TripCode,SafetyText,TestActive,StopReason';
 				csvLen := LEN(CsvLine);
 				FOR i := 0 TO 253 DO
 					CsvBytes[i] := 0;
@@ -1620,24 +1691,17 @@ BEGIN
 
 END_DATA_BLOCK
 
-ORGANIZATION_BLOCK "TimeSensitive"
+ORGANIZATION_BLOCK OB30
+TITLE = "Cyclic Interrupt - 1000ms"
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
-   VAR_TEMP 
-      NormValue : Real;
-      ScaledValue : UInt;
-   END_VAR
-
-   VAR CONSTANT 
-      PI : Real := 3.141593;
-   END_VAR
-
 
 BEGIN
-	"LabPSU"(Enable := "DB_HMI".LabPSU.Enable,
+	// LabPSU - Current control (1s cycle time)
+	"LabPSU"(Enable := "DB_HMI".LabPSU.Enable AND "DB_LogRuntime".TestActive,
 	         PermitOutput := "DB_Status".Safety.PermitMotion,
 	         Mode := "DB_HMI".LabPSU.Mode,
-	         Cycle_s := "DB_HMI".LabPSU.Cycle_s,
+	         Cycle_s := 1.0,  // 1s cycle time (OB30 = 1000ms)
 	         BaseVoltage_V := "DB_HMI".LabPSU.BaseVoltage_V,
 	         CurrentOffset_A := "DB_HMI".LabPSU.CurrentOffset_A,
 	         DebugAmplitude_A := "DB_HMI".LabPSU.DebugAmplitude_A,
@@ -1656,9 +1720,10 @@ BEGIN
 	         AQ_OutputOff_V => "DB_IO".AQ.AQ3_OutputOff,
 	         State => "DB_Status".LabPSU.State,
 	         StatusText => "DB_Status".LabPSU.StatusText,
-	         CurrentLimitExceeded => "DB_HMI".LabPSU.CurrentLimitExceeded);
+	         CurrentLimitExceeded => "DB_HMI".LabPSU.CurrentLimitExceeded,
+	         SineCycleCounter => "DB_HMI".LabPSU.SineCycleCounter);
 
-	// Logovani - vzorkovani v OB30 (1000ms), SampleEveryN=6 -> 6s vzorek
+	// Logovani - vzorkovani kazdou 1s, SampleEveryN=6 -> 6s vzorek
 	// File I/O (FlushPending) se zpracovava v Main (OB1), ne zde
 	"LogManager"(
 		Enable := "DB_LogConfig".Enable,
@@ -1681,7 +1746,7 @@ BEGIN
 	);
 	
 	//******************************************************************
-	// AUTO-RESET pulse bits (provádí se V OB30, AŽ PO LogManager)
+	// AUTO-RESET pulse bits (provádí se každou 1s, AŽ PO LogManager)
 	// Aby LogManager stihl detekovat hranu před resetem!
 	//******************************************************************
 	IF "LogManager".EdgeStartDetected THEN
@@ -1692,7 +1757,7 @@ BEGIN
 	END_IF;
 END_ORGANIZATION_BLOCK
 
-ORGANIZATION_BLOCK "Main"
+ORGANIZATION_BLOCK OB1
 TITLE = "Main Program Sweep (Cycle)"
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
@@ -1795,25 +1860,39 @@ BEGIN
 	);
 	
 	//******************************************************************
-	// AUTO STOP - Test timeout handling
+	// AUTO START LabPSU - Pri spusteni testu automaticky zapni zdroj
+	//******************************************************************
+	IF "LogManager".EdgeStartDetected AND "DB_LogRuntime".TestActive THEN
+		// Zapnout LabPSU s parametry pro SINE_DEBUG rezim
+		"DB_HMI".LabPSU.Enable := TRUE;
+		"DB_HMI".LabPSU.Mode := 2;  // SINE_DEBUG
+		"DB_HMI".LabPSU.BaseVoltage_V := 2.0;
+		"DB_HMI".LabPSU.DebugAmplitude_A := 5.0;
+		"DB_HMI".LabPSU.DebugPeriod_min := 1.0;
+		"DB_HMI".LabPSU.CurrentOffset_A := 5.0;
+		"DB_HMI".LabPSU.MaxCurrent_A := 38.0;
+	END_IF;
+	
+	//******************************************************************
+	// AUTO STOP - Test timeout handling - VYPNUTO (test bezi do nekonecna)
 	// Kdyz test dosahl casu TestDuration_s, automaticky zastav vse
 	//******************************************************************
-	IF "LogManager".TestTimeoutReached THEN
-		// Automaticky zastav vreteno - puls se vygeneruje pres HMI bit
-		// (FB_DriveCtrl ma edge detection, takze staci nastavit a zresetovat v dalsim cyklu)
-		IF NOT "DB_HMI".Spindle.Stop THEN
-			"DB_HMI".Spindle.Stop := TRUE;
-		ELSE
-			"DB_HMI".Spindle.Stop := FALSE;
-			"LogManager".TestTimeoutReached := FALSE;  // Reset timeout flag
-		END_IF;
-		
-		// Vypni laboratorni zdroj
-		"DB_HMI".LabPSU.Enable := FALSE;
-		
-		// Stop log (puls) - FlushPending uz je TRUE z FB_LogManager
-		// TestActive uz je FALSE z FB_LogManager
-	END_IF;
+	// IF "LogManager".TestTimeoutReached THEN
+	// 	// Automaticky zastav vreteno - puls se vygeneruje pres HMI bit
+	// 	// (FB_DriveCtrl ma edge detection, takze staci nastavit a zresetovat v dalsim cyklu)
+	// 	IF NOT "DB_HMI".Spindle.Stop THEN
+	// 		"DB_HMI".Spindle.Stop := TRUE;
+	// 	ELSE
+	// 		"DB_HMI".Spindle.Stop := FALSE;
+	// 		"LogManager".TestTimeoutReached := FALSE;  // Reset timeout flag
+	// 	END_IF;
+	// 	
+	// 	// Vypni laboratorni zdroj
+	// 	"DB_HMI".LabPSU.Enable := FALSE;
+	// 	
+	// 	// Stop log (puls) - FlushPending uz je TRUE z FB_LogManager
+	// 	// TestActive uz je FALSE z FB_LogManager
+	// END_IF;
 	
 	//******************************************************************
 	// HMI HELPER - Status panel color (Basic Panel limitation)

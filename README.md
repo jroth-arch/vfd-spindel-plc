@@ -87,6 +87,16 @@ V PLC jsou vytvořeny tagy, které přes DQ aktivují signály MI vstupů. Na ta
 ---
 
 ## TIA Project
+
+### 📖 Dokumentace
+
+- **Quick Start:** [docs/QUICKSTART_PLCSIM.md](docs/QUICKSTART_PLCSIM.md) - spuštění simulace za 5 minut
+- **⚠️ Import SCL:** [docs/import_scl_guide.md](docs/import_scl_guide.md) - **důležité instrukce pro nastavení OB30 cycle time!**
+- **Architektura:** [docs/architecture.md](docs/architecture.md) - detailní popis programu
+- **Test specification:** [docs/test_specification.md](docs/test_specification.md)
+
+### Přístupové údaje
+
 Otevreni projektu vfd...webapi.zap20
 user: admin
 Heslo: Admin@12345

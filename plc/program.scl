@@ -421,6 +421,11 @@ NON_RETAIN
 		// Maximalni teploty behem testu
 		MaxTempLozisko_C : Real;       // max teplota loziska od startu testu [degC]
 		MaxTempUhliky_C : Real;        // max teplota uhliku/kartacu od startu testu [degC]
+		// OB30 cycle time monitoring
+		OB30_LastTs : DTL;             // posledni cas zacatku OB30 cyklu
+		OB30_CycleTime_ms : Int;       // delka aktualniho OB30 cyklu [ms]
+		OB30_MaxCycleTime_ms : Int;    // maximum vzorkovany cyklus [ms]
+		OB30_MinCycleTime_ms : Int;    // minimum vzorkovany cyklus [ms] (init 1000)
 	END_VAR
 BEGIN
 	TestActive := false;
@@ -436,6 +441,10 @@ BEGIN
 	TimeDisplay_HMI := '000:00:00 / 000:00:00';
 	MaxTempLozisko_C := 0.0;
 	MaxTempUhliky_C := 0.0;
+	OB30_LastTs := (YEAR:=1970, MONTH:=1, DAY:=1, HOUR:=0, MINUTE:=0, SECOND:=0, NANOSECOND:=0);
+	OB30_CycleTime_ms := 0;
+	OB30_MaxCycleTime_ms := 0;
+	OB30_MinCycleTime_ms := 1000;
 END_DATA_BLOCK
 
 DATA_BLOCK "DB_LogBuffer"
@@ -1695,8 +1704,28 @@ ORGANIZATION_BLOCK OB30
 TITLE = "Cyclic Interrupt - 1000ms"
 { S7_Optimized_Access := 'TRUE' }
 VERSION : 0.1
+	VAR_TEMP
+		currentTs : DTL;
+		deltaMs : DInt;
+	END_VAR
 
 BEGIN
+	// Measure OB30 cycle time (start of cycle)
+	RD_SYS_T(OUT := currentTs);
+	IF "DB_LogRuntime".OB30_LastTs.YEAR > 0 THEN
+		deltaMs := (currentTs.SECOND - "DB_LogRuntime".OB30_LastTs.SECOND) * 1000
+		          + (INT_TO_DINT(currentTs.NANOSECOND - "DB_LogRuntime".OB30_LastTs.NANOSECOND) / 1000000);
+		IF deltaMs < 0 THEN deltaMs := 0; END_IF;
+		"DB_LogRuntime".OB30_CycleTime_ms := INT(deltaMs);
+		IF "DB_LogRuntime".OB30_CycleTime_ms > "DB_LogRuntime".OB30_MaxCycleTime_ms THEN
+			"DB_LogRuntime".OB30_MaxCycleTime_ms := "DB_LogRuntime".OB30_CycleTime_ms;
+		END_IF;
+		IF "DB_LogRuntime".OB30_CycleTime_ms < "DB_LogRuntime".OB30_MinCycleTime_ms THEN
+			"DB_LogRuntime".OB30_MinCycleTime_ms := "DB_LogRuntime".OB30_CycleTime_ms;
+		END_IF;
+	END_IF;
+	"DB_LogRuntime".OB30_LastTs := currentTs;
+
 	// LabPSU - Current control (1s cycle time)
 	"LabPSU"(Enable := "DB_HMI".LabPSU.Enable AND "DB_LogRuntime".TestActive,
 	         PermitOutput := "DB_Status".Safety.PermitMotion,

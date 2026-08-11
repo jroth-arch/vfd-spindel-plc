@@ -441,7 +441,6 @@ BEGIN
 	TimeDisplay_HMI := '000:00:00 / 000:00:00';
 	MaxTempLozisko_C := 0.0;
 	MaxTempUhliky_C := 0.0;
-	OB30_LastTs := (YEAR:=1970, MONTH:=1, DAY:=1, HOUR:=0, MINUTE:=0, SECOND:=0, NANOSECOND:=0);
 	OB30_CycleTime_ms := 0;
 	OB30_MaxCycleTime_ms := 0;
 	OB30_MinCycleTime_ms := 1000;
@@ -1711,7 +1710,7 @@ VERSION : 0.1
 
 BEGIN
 	// Measure OB30 cycle time (start of cycle)
-	RD_SYS_T(OUT := currentTs);
+	currentTs := RD_SYS_T();
 	IF "DB_LogRuntime".OB30_LastTs.YEAR > 0 THEN
 		deltaMs := (currentTs.SECOND - "DB_LogRuntime".OB30_LastTs.SECOND) * 1000
 		          + (INT_TO_DINT(currentTs.NANOSECOND - "DB_LogRuntime".OB30_LastTs.NANOSECOND) / 1000000);

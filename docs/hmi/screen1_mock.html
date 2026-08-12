@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Screen 1 HOME Mock</title>
+  <style>
+    :root {
+      --panel-bg: #d7dce1;
+      --card-bg: #eef1f4;
+      --border: #7f8a93;
+      --text-primary: #1f2a33;
+      --ready: #2e7d32;
+      --running: #1565c0;
+      --warning: #f9a825;
+      --trip: #c62828;
+      --disabled: #9aa5af;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(1200px 400px at 20% 0%, #f5f7f9 0%, transparent 60%),
+        radial-gradient(900px 300px at 80% 100%, #e3e8ec 0%, transparent 60%),
+        #c9d1d8;
+      font-family: Tahoma, "Segoe UI", sans-serif;
+      color: var(--text-primary);
+      padding: 16px;
+    }
+
+    .device {
+      width: min(100%, 980px);
+      display: grid;
+      place-items: center;
+    }
+
+    .panel {
+      width: 800px;
+      height: 480px;
+      background: var(--panel-bg);
+      border: 2px solid #66727c;
+      position: relative;
+      overflow: hidden;
+      transform-origin: top center;
+    }
+
+    .header {
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      right: 16px;
+      height: 56px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      display: grid;
+      grid-template-columns: 120px 1fr 60px 170px;
+      align-items: center;
+      gap: 12px;
+      padding: 0 12px;
+    }
+
+    .header .home {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.4px;
+    }
+
+    .status-text {
+      font-weight: 700;
+      font-size: 24px;
+    }
+
+    .timer-label {
+      font-size: 14px;
+    }
+
+    .timer-value {
+      font-size: 18px;
+      font-weight: 700;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .left-card,
+    .right-card {
+      position: absolute;
+      top: 84px;
+      bottom: 72px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      padding: 12px;
+    }
+
+    .left-card {
+      left: 16px;
+      width: 372px;
+    }
+
+    .right-card {
+      right: 16px;
+      width: 384px;
+      overflow: hidden;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .dual-fields {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    .row-temp {
+      grid-template-columns: 120px 1fr;
+      align-items: center;
+    }
+
+    .tiny-label {
+      font-size: 12px;
+      color: #3a4650;
+      margin-right: 0;
+    }
+
+    .small-input {
+      min-width: 0;
+      width: 5ch;
+      height: 22px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 3px;
+      text-align: right;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text-primary);
+      font-family: inherit;
+    }
+
+    .row label {
+      font-size: 14px;
+    }
+
+    .value,
+    .io-number {
+      min-width: 140px;
+      height: 34px;
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 4px 8px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-align: right;
+      font-family: inherit;
+    }
+
+    .value {
+      display: grid;
+      place-items: center end;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .value.current-temp {
+      min-width: 0;
+      width: auto;
+      height: 22px;
+      padding: 1px 4px;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 2px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .btn {
+      width: 120px;
+      height: 56px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn:active { filter: brightness(0.95); }
+
+    .btn.auto { border-bottom-width: 3px; }
+    .btn.stop { border-bottom-width: 3px; }
+
+    .status-ok { color: var(--ready); }
+    .status-run { color: var(--running); }
+    .status-warn { color: var(--warning); }
+    .status-trip { color: var(--trip); }
+
+    .blink {
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .last-error {
+      min-height: 56px;
+      align-items: start;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.2;
+      padding-top: 6px;
+      white-space: normal;
+    }
+
+    .footer {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 16px;
+      height: 44px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      padding: 7px;
+    }
+
+    .nav {
+      border: 1px solid var(--border);
+      background: #f8fafb;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+    }
+
+    .nav.active {
+      background: var(--disabled);
+      color: #fff;
+      cursor: not-allowed;
+    }
+
+    .unit {
+      margin-left: 2px;
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    .help {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #34424e;
+      text-align: center;
+    }
+
+    @media (max-width: 860px) {
+      .panel {
+        transform: scale(calc((100vw - 32px) / 800));
+      }
+      .device {
+        min-height: calc(480px * ((100vw - 32px) / 800));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="device">
+    <div class="panel" aria-label="KTP700 HOME screen mock">
+      <header class="header">
+        <div class="home">HOME</div>
+        <div id="statusText" class="status-text status-ok">READY</div>
+        <div class="timer-label">Timer:</div>
+        <div id="timer" class="timer-value">0:00:00:00</div>
+      </header>
+
+      <section class="left-card">
+        <div class="card-title">OVLADANI</div>
+        <div class="btn-row">
+          <button id="autoBtn" class="btn auto">AUTO</button>
+          <button id="stopBtn" class="btn stop">STOP</button>
+        </div>
+
+        <div class="row">
+          <label for="rpm">RPM setpoint</label>
+          <div>
+            <input id="rpm" class="io-number" type="number" min="0" max="18000" step="100" value="16000" />
+            <span class="unit">RPM</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="current">Cyklicky proud</label>
+          <div>
+            <input id="current" class="io-number" type="number" min="0" max="60" step="0.1" value="10.0" />
+            <span class="unit">A</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="right-card">
+        <div class="card-title">MONITORING</div>
+
+        <div class="row row-temp">
+          <label>Teplota lozisko (Akt/Max)</label>
+          <div class="dual-fields">
+            <span class="tiny-label">Akt:</span>
+            <div class="value current-temp"><span id="temp">36.4</span><span class="unit">C</span></div>
+            <span class="tiny-label">Max:</span>
+            <input id="tempLimitInput" class="small-input" type="number" min="0" max="100" step="0.1" value="75.0" />
+            <span class="unit">C</span>
+          </div>
+        </div>
+
+        <div class="row row-temp">
+          <label>Teplota kartace (Akt/Max)</label>
+          <div class="dual-fields">
+            <span class="tiny-label">Akt:</span>
+            <div class="value current-temp"><span id="brushTemp">34.8</span><span class="unit">C</span></div>
+            <span class="tiny-label">Max:</span>
+            <input id="brushTempLimitInput" class="small-input" type="number" min="0" max="100" step="0.1" value="75.0" />
+            <span class="unit">C</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Aktualni RPM</label>
+          <div class="value"><span id="actualRpm">0</span></div>
+        </div>
+
+        <div class="row">
+          <label>LOG SAVED</label>
+          <div id="logSaved" class="value status-trip">NO</div>
+        </div>
+
+        <div class="row">
+          <label>Last error</label>
+          <div id="lastError" class="value last-error">-</div>
+        </div>
+      </section>
+
+      <nav class="footer" aria-label="S1 az S7 navigace">
+        <button class="nav active">S1</button>
+        <button class="nav">S2</button>
+        <button class="nav">S3</button>
+        <button class="nav">S4</button>
+        <button class="nav">S5</button>
+        <button class="nav">S6</button>
+        <button class="nav">S7</button>
+      </nav>
+    </div>
+
+    <div class="help">Simulace: AUTO prepne na RUNNING, STOP prepne na READY a LOG SAVED=YES. Pri RUNNING a RPM=0 se zobrazi WARNING.</div>
+  </div>
+
+  <script>
+    const statusText = document.getElementById("statusText");
+    const timerEl = document.getElementById("timer");
+    const autoBtn = document.getElementById("autoBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const rpmInput = document.getElementById("rpm");
+    const tempLimitInput = document.getElementById("tempLimitInput");
+    const brushTempLimitInput = document.getElementById("brushTempLimitInput");
+    const actualRpm = document.getElementById("actualRpm");
+    const logSaved = document.getElementById("logSaved");
+    const lastError = document.getElementById("lastError");
+    const tempEl = document.getElementById("temp");
+    const brushTempEl = document.getElementById("brushTemp");
+
+    let mode = "READY";
+    let testActive = false;
+    let elapsedSec = 0;
+
+    function setStatus(next) {
+      mode = next;
+      statusText.classList.remove("status-ok", "status-run", "status-warn", "status-trip", "blink");
+
+      if (next === "READY") {
+        statusText.textContent = "READY";
+        statusText.classList.add("status-ok");
+      } else if (next === "RUNNING") {
+        statusText.textContent = "RUNNING";
+        statusText.classList.add("status-run");
+      } else if (next === "WARNING") {
+        statusText.textContent = "WARNING";
+        statusText.classList.add("status-warn");
+      } else if (next === "TRIP") {
+        statusText.textContent = "TRIP";
+        statusText.classList.add("status-trip", "blink");
+      }
+    }
+
+    function setLogSaved(ok) {
+      logSaved.textContent = ok ? "YES" : "NO";
+      logSaved.classList.remove("status-ok", "status-trip");
+      logSaved.classList.add(ok ? "status-ok" : "status-trip");
+    }
+
+    function formatTimer(sec) {
+      const d = Math.floor(sec / 86400);
+      const h = Math.floor((sec % 86400) / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      const hh = String(h).padStart(2, "0");
+      const mm = String(m).padStart(2, "0");
+      const ss = String(s).padStart(2, "0");
+      return `${d}:${hh}:${mm}:${ss}`;
+    }
+
+    function updateRunningVisuals() {
+      if (!testActive) {
+        actualRpm.textContent = "0";
+        return;
+      }
+
+      const sp = Number(rpmInput.value) || 0;
+      const measured = sp > 0 ? Math.max(0, Math.round(sp * 0.985 + (Math.random() * 60 - 30))) : 0;
+      actualRpm.textContent = String(measured);
+
+      if (sp === 0) {
+        setStatus("WARNING");
+      } else if (mode !== "TRIP") {
+        setStatus("RUNNING");
+      }
+    }
+
+    autoBtn.addEventListener("mousedown", () => {
+      testActive = true;
+      elapsedSec = 0;
+      timerEl.textContent = formatTimer(elapsedSec);
+      setLogSaved(false);
+      lastError.textContent = "-";
+      updateRunningVisuals();
+    });
+
+    stopBtn.addEventListener("mousedown", () => {
+      testActive = false;
+      setStatus("READY");
+      setLogSaved(true);
+      lastError.textContent = "-";
+      actualRpm.textContent = "0";
+    });
+
+    rpmInput.addEventListener("input", () => {
+      const value = Number(rpmInput.value);
+      if (value > 18000) rpmInput.value = "18000";
+      if (value < 0) rpmInput.value = "0";
+      updateRunningVisuals();
+    });
+
+    tempLimitInput.addEventListener("input", () => {
+      const value = Number(tempLimitInput.value);
+      if (Number.isNaN(value)) return;
+      if (value > 100) tempLimitInput.value = "100";
+      if (value < 0) tempLimitInput.value = "0";
+    });
+
+    brushTempLimitInput.addEventListener("input", () => {
+      const value = Number(brushTempLimitInput.value);
+      if (Number.isNaN(value)) return;
+      if (value > 100) brushTempLimitInput.value = "100";
+      if (value < 0) brushTempLimitInput.value = "0";
+    });
+
+    setInterval(() => {
+      if (!testActive) return;
+      elapsedSec += 1;
+      timerEl.textContent = formatTimer(elapsedSec);
+      updateRunningVisuals();
+
+      const t = Number(tempEl.textContent);
+      const next = Math.max(20, Math.min(95, t + (Math.random() * 0.6 - 0.2)));
+      tempEl.textContent = next.toFixed(1);
+      const b = Number(brushTempEl.textContent);
+      const nextBrush = Math.max(20, Math.min(95, b + (Math.random() * 0.7 - 0.25)));
+      brushTempEl.textContent = nextBrush.toFixed(1);
+      const limit = Number(tempLimitInput.value) || 75;
+      const brushLimit = Number(brushTempLimitInput.value) || 75;
+
+      if (next > limit) {
+        testActive = false;
+        setStatus("TRIP");
+        setLogSaved(false);
+        lastError.textContent = "Bearing temperature alarm";
+      } else if (nextBrush > brushLimit) {
+        testActive = false;
+        setStatus("TRIP");
+        setLogSaved(false);
+        lastError.textContent = "Brush temperature alarm";
+      }
+    }, 1000);
+
+    setStatus("READY");
+    setLogSaved(false);
+    timerEl.textContent = formatTimer(0);
+  </script>
+</body>
+</html>

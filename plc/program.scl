@@ -186,8 +186,28 @@ BEGIN
 	// Detekce stopu testu (hrana)
 	IF Enable AND (StopTest AND NOT prevStopTest) THEN
 		EdgeStopDetected := TRUE;  // Diagnostika
-		"DB_LogRuntime".TestActive := FALSE;
 		StopReason := 1;  // Manual stop
+
+		// Write final stop record before clearing TestActive so CSV captures stop state
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].t_s := "DB_LogRuntime".Elapsed_s;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RPM := RPM;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Lozisko := T_Lozisko;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Uhliky := T_Uhliky;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].Vibrace := Vibrace;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].ProudUhliky := ProudUhliky;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].State := State;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RunLatched := RunLatched;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripActive := TripActive;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripCode := TripCode;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].SafetyText := SafetyText;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TestActive := FALSE;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].StopReason := StopReason;
+		"DB_LogBuffer".TrendWriteIdx := "DB_LogBuffer".TrendWriteIdx + 1;
+		IF "DB_LogBuffer".TrendWriteIdx > 999 THEN
+			"DB_LogBuffer".TrendWriteIdx := 0;
+		END_IF;
+
+		"DB_LogRuntime".TestActive := FALSE;
 		FlushPending := TRUE;   // finalni flush pri manuálním stopu
 		LastFlushTrigger := 2;  // manual stop flush
 		// (event log: TEST_STOP)
@@ -426,6 +446,7 @@ NON_RETAIN
 		OB30_CycleTime_ms : Int;       // delka aktualniho OB30 cyklu [ms]
 		OB30_MaxCycleTime_ms : Int;    // maximum vzorkovany cyklus [ms]
 		OB30_MinCycleTime_ms : Int;    // minimum vzorkovany cyklus [ms] (init 1000)
+		OB30_CycleCounter : DInt;      // pocet OB30 cyklu od startu testu (kazdych 1s by se zvysil o 1)
 	END_VAR
 BEGIN
 	TestActive := false;
@@ -444,6 +465,7 @@ BEGIN
 	OB30_CycleTime_ms := 0;
 	OB30_MaxCycleTime_ms := 0;
 	OB30_MinCycleTime_ms := 1000;
+	OB30_CycleCounter := 0;
 END_DATA_BLOCK
 
 DATA_BLOCK "DB_LogBuffer"
@@ -1705,17 +1727,23 @@ TITLE = "Cyclic Interrupt - 1000ms"
 VERSION : 0.1
 	VAR_TEMP
 		currentTs : DTL;
+		secNow_ms : DInt;
+		secLast_ms : DInt;
 		deltaMs : DInt;
+		retVal : Int;
 	END_VAR
 
 BEGIN
-	// Measure OB30 cycle time (start of cycle)
-	currentTs := RD_SYS_T();
-	IF "DB_LogRuntime".OB30_LastTs.YEAR > 0 THEN
-		deltaMs := (currentTs.SECOND - "DB_LogRuntime".OB30_LastTs.SECOND) * 1000
-		          + (INT_TO_DINT(currentTs.NANOSECOND - "DB_LogRuntime".OB30_LastTs.NANOSECOND) / 1000000);
-		IF deltaMs < 0 THEN deltaMs := 0; END_IF;
-		"DB_LogRuntime".OB30_CycleTime_ms := INT(deltaMs);
+	// Measure OB30 cycle time using RD_SYS_T()
+	retVal := RD_SYS_T(currentTs);
+	IF retVal = 0 AND "DB_LogRuntime".OB30_LastTs.NANOSECOND > 0 THEN
+		// Cast USInt SECOND to DInt before multiply, then subtract to avoid type range error
+		secNow_ms  := USINT_TO_DINT(currentTs.SECOND) * 1000 + UDINT_TO_DINT(currentTs.NANOSECOND / 1000000);
+		secLast_ms := USINT_TO_DINT("DB_LogRuntime".OB30_LastTs.SECOND) * 1000 + UDINT_TO_DINT("DB_LogRuntime".OB30_LastTs.NANOSECOND / 1000000);
+		deltaMs := secNow_ms - secLast_ms;
+		IF deltaMs < 0 THEN deltaMs := deltaMs + 60000; END_IF;  // minute rollover (59→0)
+		IF deltaMs > 32767 THEN deltaMs := 32767; END_IF;
+		"DB_LogRuntime".OB30_CycleTime_ms := DINT_TO_INT(deltaMs);
 		IF "DB_LogRuntime".OB30_CycleTime_ms > "DB_LogRuntime".OB30_MaxCycleTime_ms THEN
 			"DB_LogRuntime".OB30_MaxCycleTime_ms := "DB_LogRuntime".OB30_CycleTime_ms;
 		END_IF;
@@ -1723,7 +1751,14 @@ BEGIN
 			"DB_LogRuntime".OB30_MinCycleTime_ms := "DB_LogRuntime".OB30_CycleTime_ms;
 		END_IF;
 	END_IF;
-	"DB_LogRuntime".OB30_LastTs := currentTs;
+	IF retVal = 0 THEN
+		"DB_LogRuntime".OB30_LastTs := currentTs;
+	END_IF;
+	
+	// OB30 cycle counter (diagnostic - should increment by ~1 per second)
+	IF "DB_LogRuntime".TestActive THEN
+		"DB_LogRuntime".OB30_CycleCounter := "DB_LogRuntime".OB30_CycleCounter + 1;
+	END_IF;
 
 	// LabPSU - Current control (1s cycle time)
 	"LabPSU"(Enable := "DB_HMI".LabPSU.Enable AND "DB_LogRuntime".TestActive,

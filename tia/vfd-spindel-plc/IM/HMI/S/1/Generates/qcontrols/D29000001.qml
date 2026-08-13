@@ -32,7 +32,7 @@ IGuiDialogView
 		width: 440
 		height: 144
 		qm_list.qm_linesPerRow: 1
-		qm_list.qm_tableRowHeight: 16
+		qm_list.qm_tableRowHeight: 19
 		qm_list.qm_tableMarginLeft: 1
 		qm_list.qm_tableMarginRight: 1
 		qm_list.qm_tableMarginBottom: 1

@@ -48,7 +48,7 @@ Item
 		qm_BorderWidth: 1
 		qm_RectangleBorder.color:"#ff1c1f30"
 		qm_FillColor: "#ffff7f50"
-		qm_Font.pixelSize: 13
+		qm_Font.pixelSize: 16
 		qm_Font.family: "Tahoma"
 		captionrectX: 0
 		captionrectY: 1
@@ -64,8 +64,8 @@ Item
 		modalityHeight: 100
 		IGuiGraphicButton
 		{
-			id: q486539293
-			objId: 486539293
+			id: q486539291
+			objId: 486539291
 			x: 666
 			y: 0
 			width: 34
@@ -84,7 +84,7 @@ Item
 			qm_SourceSizeHeight: 30
 			Component.onCompleted:
 			{
-				proxy.initProxy(q486539293,486539293)
+				proxy.initProxy(q486539291,486539291)
 			}
 		}
 		IGuiAlarmView
@@ -171,8 +171,8 @@ Item
 			}
 			IGuiGraphicButton
 			{
-				id: q486539294
-				objId: 486539294
+				id: q486539292
+				objId: 486539292
 				x: 2
 				y: 303
 				width: 56
@@ -196,13 +196,13 @@ Item
 				qm_SourceSizeHeight: 36
 				Component.onCompleted:
 				{
-					proxy.initProxy(q486539294,486539294)
+					proxy.initProxy(q486539292,486539292)
 				}
 			}
 			IGuiGraphicButton
 			{
-				id: q486539295
-				objId: 486539295
+				id: q486539293
+				objId: 486539293
 				x: 640
 				y: 303
 				width: 56
@@ -226,7 +226,7 @@ Item
 				qm_SourceSizeHeight: 36
 				Component.onCompleted:
 				{
-					proxy.initProxy(q486539295,486539295)
+					proxy.initProxy(q486539293,486539293)
 				}
 			}
 			Component.onCompleted:
@@ -252,7 +252,7 @@ Item
 		qm_BorderWidth: 1
 		qm_RectangleBorder.color:"#ff1c1f30"
 		qm_FillColor: "#ffff7f50"
-		qm_Font.pixelSize: 13
+		qm_Font.pixelSize: 16
 		qm_Font.family: "Tahoma"
 		captionrectX: 0
 		captionrectY: 1
@@ -268,8 +268,8 @@ Item
 		modalityHeight: 100
 		IGuiGraphicButton
 		{
-			id: q486539296
-			objId: 486539296
+			id: q486539294
+			objId: 486539294
 			x: 666
 			y: 0
 			width: 34
@@ -288,7 +288,7 @@ Item
 			qm_SourceSizeHeight: 30
 			Component.onCompleted:
 			{
-				proxy.initProxy(q486539296,486539296)
+				proxy.initProxy(q486539294,486539294)
 			}
 		}
 		IGuiAlarmView
@@ -375,8 +375,8 @@ Item
 			}
 			IGuiGraphicButton
 			{
-				id: q486539297
-				objId: 486539297
+				id: q486539295
+				objId: 486539295
 				x: 2
 				y: 303
 				width: 56
@@ -400,13 +400,13 @@ Item
 				qm_SourceSizeHeight: 36
 				Component.onCompleted:
 				{
-					proxy.initProxy(q486539297,486539297)
+					proxy.initProxy(q486539295,486539295)
 				}
 			}
 			IGuiGraphicButton
 			{
-				id: q486539298
-				objId: 486539298
+				id: q486539296
+				objId: 486539296
 				x: 640
 				y: 303
 				width: 56
@@ -430,7 +430,7 @@ Item
 				qm_SourceSizeHeight: 36
 				Component.onCompleted:
 				{
-					proxy.initProxy(q486539298,486539298)
+					proxy.initProxy(q486539296,486539296)
 				}
 			}
 			Component.onCompleted:
@@ -456,7 +456,7 @@ Item
 		qm_BorderWidth: 1
 		qm_RectangleBorder.color:"#ff1c1f30"
 		qm_FillColor: "#ffff7f50"
-		qm_Font.pixelSize: 13
+		qm_Font.pixelSize: 16
 		qm_Font.family: "Tahoma"
 		captionrectX: 0
 		captionrectY: 1
@@ -472,8 +472,8 @@ Item
 		modalityHeight: 100
 		IGuiGraphicButton
 		{
-			id: q486539299
-			objId: 486539299
+			id: q486539297
+			objId: 486539297
 			x: 666
 			y: 0
 			width: 34
@@ -492,7 +492,7 @@ Item
 			qm_SourceSizeHeight: 30
 			Component.onCompleted:
 			{
-				proxy.initProxy(q486539299,486539299)
+				proxy.initProxy(q486539297,486539297)
 			}
 		}
 		IGuiAlarmView
@@ -579,8 +579,8 @@ Item
 			}
 			IGuiGraphicButton
 			{
-				id: q486539300
-				objId: 486539300
+				id: q486539298
+				objId: 486539298
 				x: 2
 				y: 303
 				width: 56
@@ -604,13 +604,13 @@ Item
 				qm_SourceSizeHeight: 36
 				Component.onCompleted:
 				{
-					proxy.initProxy(q486539300,486539300)
+					proxy.initProxy(q486539298,486539298)
 				}
 			}
 			IGuiGraphicButton
 			{
-				id: q486539301
-				objId: 486539301
+				id: q486539299
+				objId: 486539299
 				x: 640
 				y: 303
 				width: 56
@@ -634,7 +634,7 @@ Item
 				qm_SourceSizeHeight: 36
 				Component.onCompleted:
 				{
-					proxy.initProxy(q486539301,486539301)
+					proxy.initProxy(q486539299,486539299)
 				}
 			}
 			Component.onCompleted:

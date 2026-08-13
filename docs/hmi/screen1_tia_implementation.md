@@ -75,11 +75,14 @@ Pozice a rozmery nejsou fixni, nastav je podle citu obsluhy a citelnosti na pane
 - Color: tmave modro-seda
 
 ### Objekt 6: Timer value
-- Type: I/O field (numeric/string dle dostupneho tagu)
-- Primary tag: `"DB_LogRuntime".Elapsed_s`
-- Format: seconds -> text D:HH:MM:SS (pokud panel neumi formatovat, pouzit HH:MM:SS)
+- Type: I/O field (Output)
+- Process tag: `"DB_LogRuntime".TimeDisplay_HMI`
+- Data type: String[21]
+- Format: PLC uz pripravuje text `HHH:MM:SS / HHH:MM:SS` (elapsed / target)
 - Font: Tahoma, 18, Bold
 - Color: tmave modro-seda
+
+Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou to casove struktury pro interni PLC logiku. Pokud chces zobrazit pouze uplynuly cas, pouzij misto toho `"DB_LogRuntime".ElapsedTime_HMI` (String[9]).
 
 ## 3.2 Leva karta OVLADANI
 
@@ -269,7 +272,7 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 - `"DB_HMI".Sensors.TM_Rotation_A_Channel` - monitoring
 - `"DB_Status".HMI_StatusText` - status text
 - `"DB_Status".HMI_StatusColor` - status color animation
-- `"DB_LogRuntime".Elapsed_s` - timer
+- `"DB_LogRuntime".TimeDisplay_HMI` - timer text
 - `"DB_LogRuntime".LastStopLogSaved` - log ulozeno
 - `"DB_LogRuntime".LastError` - posledni chyba
 

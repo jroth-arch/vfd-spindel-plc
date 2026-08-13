@@ -46,7 +46,8 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 |---|---|---|---|
 | **LOG STATUS** | | | |
 | Log | `"DB_LogRuntime".TestActive` | Bool | TRUE = test právě běží |
-| Log | `"DB_LogRuntime".Elapsed_s` | Real | Uplynulý čas testu [s] |
+| Log | `"DB_LogRuntime".ElapsedTime_HMI` | String[9] | Uplynulý čas ve formátu HHH:MM:SS |
+| Log | `"DB_LogRuntime".TimeDisplay_HMI` | String[21] | Uplynulý/cílový čas ve formátu HHH:MM:SS / HHH:MM:SS |
 | Log | `"DB_LogRuntime".SampleCounter` | DInt | Počet nahraných vzorků |
 | Log | `"DB_LogRuntime".FileName` | String[32] | Název souboru logu |
 | Log | `"DB_LogRuntime".HeaderWritten` | Bool | CSV hlavička zapsána |
@@ -317,7 +318,7 @@ Kontrolovat: "DB_Status".Spindel.State == 0 (STOPPED)
 
 ### Panel LOG
 - Test aktivní → `"DB_LogRuntime".TestActive`
-- Uplynulý čas → `"DB_LogRuntime".Elapsed_s`
+- Uplynulý čas → `"DB_LogRuntime".TimeDisplay_HMI` nebo `"DB_LogRuntime".ElapsedTime_HMI`
 - Vzorky → `"DB_LogRuntime".SampleCounter`
 - Soubor → `"DB_LogRuntime".FileName`
 - Chyby flush → `"DB_LogRuntime".FlushErrorCount`

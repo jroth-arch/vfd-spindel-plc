@@ -231,25 +231,20 @@ BEGIN
 	IF Enable AND "DB_LogRuntime".TestActive THEN
 		cycleCounter := cycleCounter + 1;
 
+		// Timer HMI se aktualizuje kazdy OB30 cyklus (1 s), nezavisle na vzorkovani logu.
+		"DB_LogRuntime".Elapsed_s := "DB_LogRuntime".Elapsed_s + 1.0;
+		"DB_LogRuntime".ElapsedTime_HMI := "FC_SecondsToTimeString"(seconds := "DB_LogRuntime".Elapsed_s);
+		"DB_LogRuntime".TimeDisplay_HMI := CONCAT(
+			IN1 := "DB_LogRuntime".ElapsedTime_HMI,
+			IN2 := ' / '
+		);
+		"DB_LogRuntime".TimeDisplay_HMI := CONCAT(
+			IN1 := "DB_LogRuntime".TimeDisplay_HMI,
+			IN2 := "DB_LogRuntime".TargetTime_HMI
+		);
+
 		IF cycleCounter >= SampleEveryN_Cycles THEN
 			cycleCounter := 0;
-
-			// Cas od startu: kazdy vzorek = SampleEveryN_Cycles * 1s (OB30 period = 1s)
-			"DB_LogRuntime".Elapsed_s := "DB_LogRuntime".Elapsed_s
-				+ (INT_TO_REAL(SampleEveryN_Cycles) * 1.0);
-			
-			// Update formatted time strings for HMI display
-			"DB_LogRuntime".ElapsedTime_HMI := "FC_SecondsToTimeString"(seconds := "DB_LogRuntime".Elapsed_s);
-			
-			// Update combined time display (optional - for single field HMI display)
-			"DB_LogRuntime".TimeDisplay_HMI := CONCAT(
-				IN1 := "DB_LogRuntime".ElapsedTime_HMI,
-				IN2 := ' / '
-			);
-			"DB_LogRuntime".TimeDisplay_HMI := CONCAT(
-				IN1 := "DB_LogRuntime".TimeDisplay_HMI,
-				IN2 := "DB_LogRuntime".TargetTime_HMI
-			);
 
 			// Zapis vzorku do kruhoveho bufferu
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].t_s := "DB_LogRuntime".Elapsed_s;
@@ -436,7 +431,7 @@ NON_RETAIN
 		StopSequenceActive : Bool;     // TRUE = probiha stop sekvence a ceka se na final flush
 		LastStopLogSaved : Bool;       // TRUE = posledni stop dokoncil flush na SD (indikace pro HMI)
 		TestStartTs : Date_And_Time;   // cas startu testu (RD_SYS_T pri StartTest hrane)
-		Elapsed_s : Real;              // uplynuly cas od startu testu [s], aktualizuje se kazdych 6s
+		Elapsed_s : Real;              // uplynuly cas od startu testu [s], aktualizuje se kazdou 1s
 		SampleCounter : DInt;          // celkovy pocet vzorku zapsanych do bufferu od startu
 		LastFlushOk : Bool;            // TRUE = posledni flush na SD probehl bez chyby
 		LastError : String[40];        // text posledni chyby flushe (FileWriteC status kod)
@@ -455,6 +450,9 @@ NON_RETAIN
 		OB30_CycleTime_ms : Int;       // delka aktualniho OB30 cyklu [ms]
 		OB30_MaxCycleTime_ms : Int;    // maximum vzorkovany cyklus [ms]
 		OB30_MinCycleTime_ms : Int;    // minimum vzorkovany cyklus [ms] (init 1000)
+		OB30_AverageCycleTime_ms : Real; // prumer platnych OB30 cyklu [ms]
+		OB30_CycleTimeOutOfRange : Bool; // TRUE = prumer mimo 950..1050 ms pro HMI
+		OB30_CycleTimeSum_ms : Real;   // pomocny soucet platnych OB30 mereni [ms]
 		OB30_CycleCounter : DInt;      // pocet OB30 cyklu od startu testu (kazdych 1s by se zvysil o 1)
 	END_VAR
 BEGIN
@@ -479,6 +477,9 @@ BEGIN
 	OB30_CycleTime_ms := 0;
 	OB30_MaxCycleTime_ms := 0;
 	OB30_MinCycleTime_ms := 1000;
+	OB30_AverageCycleTime_ms := 0.0;
+	OB30_CycleTimeOutOfRange := FALSE;
+	OB30_CycleTimeSum_ms := 0.0;
 	OB30_CycleCounter := 0;
 END_DATA_BLOCK
 
@@ -1196,7 +1197,7 @@ NON_RETAIN
       Safety : "UDT_SAFETY_STATUS";
       LabPSU { S7_SetPoint := 'False'} : "UDT_LABPSU_STATUS";
       // HMI helper for status panel color (Basic Panel limitation - one tag only)
-	HMI_StatusColor : USInt;  // 0=GRAY (ready), 1=GREEN (running), 2=RED (error/trip), 3=AMBER (running with RPM=0)
+	HMI_StatusColor : USInt;  // 0=READY (green), 1=RUNNING (blue), 2=RED (error/trip), 3=AMBER (running with RPM=0)
 	HMI_StatusText : String[24];  // "TEST READY" / "TEST RUNNING" / "RUNNING - RPM=0" / "READY - LOG SAVED" / "ERROR - TRIP ACTIVE"
    END_VAR
 
@@ -1270,8 +1271,8 @@ DATA_BLOCK "DB_Alarms"
 VERSION : 0.1
 NON_RETAIN
    VAR 
-      TempHighLozisko : Bool;   // TRUE = teplota loziska > TempHighThreshold_C
-      TempHighKartace : Bool;   // TRUE = teplota kartacu > TempHighThreshold_C
+	TempHighLozisko : Bool;   // TRUE = teplota loziska > TempHighLoziskoThreshold_C
+	TempHighKartace : Bool;   // TRUE = teplota kartacu > TempHighKartaceThreshold_C
       TempAlarm : Bool;         // TRUE = TempHighLozisko OR TempHighKartace → trip
       VibCritical : Bool;       // TRUE = kritické vibrace (senzor zatim nezapojen)
    END_VAR
@@ -1286,7 +1287,9 @@ DATA_BLOCK "DB_Config"
 VERSION : 0.1
 NON_RETAIN
 	VAR
-		TempHighThreshold_C : Real;   // prahova teplota alarmu [degC] – default 65.0
+		TempHighThreshold_C : Real;   // deprecated: legacy common threshold
+		TempHighLoziskoThreshold_C : Real;   // prah teploty loziska [degC]
+		TempHighKartaceThreshold_C : Real;   // prah teploty kartace [degC]
 		VibCriticalThreshold : Real;  // prahova hodnota vibraci – default 0.0 (senzor nezapojen)
 		DAC_MaxDacRange : Int;        // max hodnota DAC pro 10V (S7-1200) – default 27648
 		InputSim : Struct
@@ -1305,6 +1308,8 @@ NON_RETAIN
 
 BEGIN
 	TempHighThreshold_C := 65.0;
+	TempHighLoziskoThreshold_C := 65.0;
+	TempHighKartaceThreshold_C := 65.0;
 	VibCriticalThreshold := 0.0;
 	DAC_MaxDacRange := 27648;
 	InputSim.EnableSafetyRelayAuxOverride := false;
@@ -1756,6 +1761,15 @@ BEGIN
 		IF deltaMs < 0 THEN deltaMs := deltaMs + 60000; END_IF;  // minute rollover (59→0)
 		IF deltaMs > 32767 THEN deltaMs := 32767; END_IF;
 		"DB_LogRuntime".OB30_CycleTime_ms := DINT_TO_INT(deltaMs);
+		"DB_LogRuntime".OB30_CycleTimeSum_ms := "DB_LogRuntime".OB30_CycleTimeSum_ms
+			+ INT_TO_REAL("DB_LogRuntime".OB30_CycleTime_ms);
+		"DB_LogRuntime".OB30_CycleCounter := "DB_LogRuntime".OB30_CycleCounter + 1;
+		"DB_LogRuntime".OB30_AverageCycleTime_ms :=
+			"DB_LogRuntime".OB30_CycleTimeSum_ms
+			/ DINT_TO_REAL("DB_LogRuntime".OB30_CycleCounter);
+		"DB_LogRuntime".OB30_CycleTimeOutOfRange :=
+			("DB_LogRuntime".OB30_AverageCycleTime_ms < 950.0)
+			OR ("DB_LogRuntime".OB30_AverageCycleTime_ms > 1050.0);
 		IF "DB_LogRuntime".OB30_CycleTime_ms > "DB_LogRuntime".OB30_MaxCycleTime_ms THEN
 			"DB_LogRuntime".OB30_MaxCycleTime_ms := "DB_LogRuntime".OB30_CycleTime_ms;
 		END_IF;
@@ -1767,11 +1781,6 @@ BEGIN
 		"DB_LogRuntime".OB30_LastTs := currentTs;
 	END_IF;
 	
-	// OB30 cycle counter (diagnostic - should increment by ~1 per second)
-	IF "DB_LogRuntime".TestActive THEN
-		"DB_LogRuntime".OB30_CycleCounter := "DB_LogRuntime".OB30_CycleCounter + 1;
-	END_IF;
-
 	// LabPSU - Current control (1s cycle time)
 	"LabPSU"(Enable := "DB_HMI".LabPSU.Enable AND "DB_LogRuntime".TestActive,
 	         PermitOutput := "DB_Status".Safety.PermitMotion,
@@ -1806,9 +1815,9 @@ BEGIN
 		StopTest := "DB_LogConfig".StopTest OR "DB_LogRuntime".StopReqLatched,
 		RPM := "DB_HMI".Sensors.TM_Rotation_A_Channel,
 		T_Lozisko := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C,
-		T_Uhliky := 0.0,      // TODO: napojit na skutecny senzor teploty uhliku
+		T_Uhliky := "DB_HMI".Sensors.AI2_Teplota_Kartace_C,
 		Vibrace := 0.0,       // TODO: napojit na skutecny senzor vibraci
-		ProudUhliky := ("DB_IO".AQ.AQ1_CurrentCtrl_V / 5.0) * 60.0,
+		ProudUhliky := "DB_Status".LabPSU.CurrentSet_A,
 		State := "DB_Status".Spindel.State,
 		RunLatched := "DB_Status".Spindel.RunLatched,
 		TripActive := "DB_Status".Safety.TripActive,
@@ -1860,8 +1869,8 @@ BEGIN
 	//******************************************************************
 	// CALL FB BLOCKS - PRODUCTION LOGIC
 	//******************************************************************
-	"DB_Alarms".TempHighLozisko := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C > "DB_Config".TempHighThreshold_C;
-	"DB_Alarms".TempHighKartace := "DB_HMI".Sensors.AI2_Teplota_Kartace_C > "DB_Config".TempHighThreshold_C;
+	"DB_Alarms".TempHighLozisko := "DB_HMI".Sensors.AI1_Teplota_Lozisko_C > "DB_Config".TempHighLoziskoThreshold_C;
+	"DB_Alarms".TempHighKartace := "DB_HMI".Sensors.AI2_Teplota_Kartace_C > "DB_Config".TempHighKartaceThreshold_C;
 	"DB_Alarms".TempAlarm := "DB_Alarms".TempHighLozisko OR "DB_Alarms".TempHighKartace;
 
 	// Nektere safety signaly nemame implementovane - teplota, vibrace. Zatim bude potreba je simulovat
@@ -1967,7 +1976,12 @@ BEGIN
 		"DB_HMI".LabPSU.Enable := FALSE;
 		"DB_HMI".LabPSU.Mode := 2;  // dalsi AUTO startuje v SINE rezimu
 		"DB_HMI".Spindle.Speed_RPM := 0.0;
-		"DB_LogConfig".Enable := FALSE;
+		"DB_LogRuntime".Elapsed_s := 0.0;
+		"DB_LogRuntime".ElapsedTime_HMI := '000:00:00';
+		"DB_LogRuntime".TimeDisplay_HMI := CONCAT(
+			IN1 := "DB_LogRuntime".ElapsedTime_HMI,
+			IN2 := CONCAT(IN1 := ' / ', IN2 := "DB_LogRuntime".TargetTime_HMI)
+		);
 		"DB_LogRuntime".LastStopLogSaved := "DB_LogRuntime".LastFlushOk;
 		"DB_LogRuntime".StopSequenceActive := FALSE;
 	END_IF;
@@ -1995,7 +2009,7 @@ BEGIN
 	
 	//******************************************************************
 	// HMI HELPER - Status panel color (Basic Panel limitation)
-	// Priority: RED (trip) > GREEN (running) > GRAY (ready)
+	// Priority: RED (trip) > AMBER (warning) > BLUE (running) > GREEN (ready)
 	//******************************************************************
 	//******************************************************************
 	IF "DB_Status".Safety.TripActive THEN
@@ -2011,7 +2025,7 @@ BEGIN
 				"DB_Status".HMI_StatusText := 'TEST RUNNING';
 			END_IF;
 		ELSE
-			"DB_Status".HMI_StatusColor := 0;  // GRAY - ready/stopped
+			"DB_Status".HMI_StatusColor := 0;  // GREEN - ready/stopped
 			IF "DB_LogRuntime".LastStopLogSaved THEN
 				"DB_Status".HMI_StatusText := 'READY - LOG SAVED';
 			ELSE

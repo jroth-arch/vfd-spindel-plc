@@ -60,6 +60,9 @@ V `WT_00_SETUP_AUTO` nastav:
 "DB_HMI".LabPSU.BaseVoltage_V := 2.0
 "DB_HMI".LabPSU.DebugAmplitude_A := 5.0
 "DB_HMI".LabPSU.DebugPeriod_min := 1.0
+
+"DB_Config".TempHighLoziskoThreshold_C := 65.0
+"DB_Config".TempHighKartaceThreshold_C := 65.0
 ```
 
 Pulzní tagy před startem musí být `FALSE`:
@@ -74,6 +77,8 @@ Pulzní tagy před startem musí být `FALSE`:
 
 `DB_HMI.LabPSU.Enable` před AUTO nemusíš nastavovat. Při náběhu `TestActive` ho nastavuje PLC a současně přepne `LabPSU.Mode` na `2` (`SINE_DEBUG`). Hodnota `DebugAmplitude_A` zadaná na HMI zůstává zachována a použije se pro sinusový proud.
 V režimu `SINE_DEBUG` je `DebugAmplitude_A` maximum celého průběhu `0..A`; `CurrentOffset_A` se v tomto režimu nepoužívá.
+
+Timer HMI se aktualizuje kazdou sekundu. Logovaci vzorek se nadale uklada priblizne kazdych 6 sekund, ale to uz neovlivnuje zobrazeny cas.
 
 ## 4. Preflight před AUTO
 
@@ -184,11 +189,14 @@ Sleduj:
 Očekávání:
 
 - `SampleCounter` roste po přibližně 6 sekundách.
+- `ElapsedTime_HMI` a `TimeDisplay_HMI` se mění každou sekundu.
 - `HeaderWritten` po prvním úspěšném flush přejde na `TRUE`.
 - `LastFlushOk` je `TRUE`.
 - `FlushErrorCount` zůstává `0`.
 - `LastError` neobsahuje novou chybu.
 - `FileStatus` je `0` nebo úspěšný stav definovaný FileWriteC.
+- při `DebugAmplitude_A = 5.0` se `DB_Status.LabPSU.CurrentSet_A` během periody pohybuje v rozsahu přibližně `0..5.0 A`;
+- maximum ověř ve Watch table na `CurrentSet_A`, ne z hodnoty `AQ1_CurrentCtrl_V`, která je kalibrovaný napěťový řídicí signál.
 
 ## 6. Test STOP z WinCC
 
@@ -236,7 +244,7 @@ Počkej, až se flush automat vrátí do klidového stavu. Potom očekávej:
 "DB_HMI".LabPSU.Enable = FALSE
 "DB_Status".LabPSU.State = 0
 "DB_HMI".Spindle.Speed_RPM = 0.0
-"DB_LogConfig".Enable = FALSE
+"DB_LogConfig".Enable = TRUE
 "DB_LogRuntime".LastFlushOk = TRUE
 "DB_LogRuntime".LastStopLogSaved = TRUE
 "DB_Status".HMI_StatusText = 'READY - LOG SAVED'

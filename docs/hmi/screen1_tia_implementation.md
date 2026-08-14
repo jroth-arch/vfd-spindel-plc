@@ -173,14 +173,15 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
 
 ### Objekt 18: Prah lozisko (value)
 - Type: I/O field (display)
-- Tag: `"DB_Config".TempHighThreshold_C`
+- Tag: `"DB_Config".TempHighLoziskoThreshold_C`
+- Access: Input
 - Format: 0.0 `C`
 - Font: Tahoma, 18, Bold
 
 ### Objekt 19: Teplota kartace (Akt/Max)
 - Type: I/O field (display) + I/O field (input)
 - Aktualni teplota tag: `"DB_HMI".Sensors.AI2_Teplota_Kartace_C`
-- Max threshold tag: `"DB_Config".TempHighThreshold_C`
+- Max threshold tag: `"DB_Config".TempHighKartaceThreshold_C`
 - Aktualni teplota:
   - Access: Output
   - Format: 0.0 `C`
@@ -193,7 +194,7 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
 - Labely: `Akt:` a `Max:`
 - Barva aktualni hodnoty: tmave modro-seda
 - Barva Max pole: svetle seda; podle potreby dynamizovat pres `Appearance`
-- Poznamka: PLC porovnava aktualni teplotu kartace se stejnym `TempHighThreshold_C`, ktery se pouziva i pro lozisko.
+- Poznamka: PLC porovnava teplotu loziska a kartace se samostatnymi threshold tagy.
 
 ### Objekt 20: Aktualni RPM (value)
 - Type: I/O field (display)
@@ -215,14 +216,104 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
 - Word wrap: ON
 - Max chars visible: 40
 
+### Objekt 23: Signalizacni objekt `VRETENO`
+- Type: Circle nebo lamp object + I/O field pro textovy stav
+- Bool Appearance tag lampy: `"DB_Status".Spindel.RunLatched`
+- Druhy Appearance tag pro poruchu: `"DB_Status".Spindel.TripActive`
+- Textovy stavovy tag: `"DB_Status".Spindel.StatusText`
+- Text u lampy: `VRETENO`
+- Barva lampy:
+  - `RunLatched = FALSE` a `TripActive = FALSE` -> seda
+  - `RunLatched = TRUE` a `TripActive = FALSE` -> modra
+  - `TripActive = TRUE` -> cervena
+- Textovy stav z PLC zobraz jako Output I/O field, ne jako zapisovatelne pole.
+- Ocekavane texty: `STOPPED`, `RUN CMD (no feedback)`, `STOPPING (ramp down)`, `TRIP (E-Stop/Interlock)`.
+
+### Objekt 24: Signalizacni objekt `ZDROJ`
+- Type: Circle nebo lamp object + I/O field pro textovy stav
+- Bool Appearance tag lampy: `"DB_HMI".LabPSU.Enable`
+- Chybovy Appearance tag: `"DB_HMI".LabPSU.CurrentLimitExceeded`
+- Textovy stavovy tag: `"DB_Status".LabPSU.StatusText`
+- Text u lampy: `ZDROJ`
+- Barva lampy:
+  - `Enable = FALSE` -> seda
+  - `Enable = TRUE` a `CurrentLimitExceeded = FALSE` -> modra
+  - `CurrentLimitExceeded = TRUE` -> cervena
+- Textovy stav z PLC zobraz jako Output I/O field.
+- Ocekavane texty: `OFF`, `CONST`, `SINE DEBUG 0..A`, `SAFE OFF`.
+
+### Objekt 25: Signalizacni objekt `SAFETY`
+- Type: Circle nebo lamp object + I/O field pro textovy stav
+- Bool Appearance tag lampy: `"DB_Status".Safety.TripActive`
+- Doplňkovy tag pro rozliseni povoleni: `"DB_Status".Safety.PermitMotion`
+- Textovy stavovy tag: `"DB_Status".Safety.StatusText`
+- Text u lampy: `SAFETY`
+- Barva lampy:
+  - `TripActive = FALSE` a `PermitMotion = TRUE` -> zelena
+  - `TripActive = FALSE` a `PermitMotion = FALSE` -> oranzova
+  - `TripActive = TRUE` -> cervena
+- Textovy stav z PLC zobraz jako Output I/O field.
+- Ocekavane texty: `READY`, `E-STOP ACTIVE`, `SAFETY RELAY NOT OK`, `EXTERNAL FAULT`, `TEMP ALARM`, `VIBRATION ALARM`.
+
+#### Prakticke vytvoreni lampy a textu v TIA
+
+Pro kazdy celek vytvor dva objekty:
+
+1. `Circle` nebo `Lamp` pro barvu.
+2. `I/O field` v rezimu `Output` pro textovy stav.
+
+U lampy:
+
+1. Otevri `Properties -> Animations -> Appearance`.
+2. Vloz Bool tag podle tabulky objektu.
+3. Nastav `FALSE` a `TRUE` na vychozi barvy.
+4. Pokud je k dispozici druha Appearance animace, pridej chybovy Bool tag s cervenou prioritou.
+5. Pokud TIA dovoluje pouze jednu Bool Appearance animaci, pouzij jako barvu lampy chybovy tag (`TripActive` nebo `CurrentLimitExceeded`) a stav behu zobraz pouze textem.
+
+U textoveho I/O fieldu:
+
+1. Nastav objekt jako `I/O field` v rezimu `Output`.
+2. Do process tagu vloz stavovy String tag z tabulky.
+3. Nepridavej Input/Output pristup, aby obsluha stavovy text nemohla prepisovat.
+4. Nastav stejny font jako u ostatnich diagnostickych textu, Tahoma 14 nebo 18 podle prostoru.
+5. Text muze zustat cerne/tmave modro-sedy; stav je primarne signalizovan lampou a samotnym PLC textem.
+
+U vsech tri lamp nastav `Animations -> Appearance` a u textu pouzij stavovy String tag. Barva tedy signalizuje kategorii stavu, zatimco text vysvetluje konkretni pricinu.
+
+### Objekt 26: Prumer OB30 cycle time
+- Type: I/O field (Output)
+- Process tag: `"DB_LogRuntime".OB30_AverageCycleTime_ms`
+- Data type: Real
+- Format: `0.0 ms`
+- Text/label: `OB30 avg:`
+- Access: Output, bez moznosti zapisu
+- Visibility tag: `"DB_LogRuntime".OB30_CycleTimeOutOfRange`
+- Visibility:
+  - `FALSE` -> objekt skryty
+  - `TRUE` -> objekt zobrazen
+- Text color: cervena, pokud je objekt zobrazen
+- Poznamka: Prumer se pocita z platnych mereni OB30. Hranice jsou mimo rozsah `950..1050 ms`.
+
+### Objekt 27: Varovani `OB30 CYCLE TIME`
+- Type: Static text nebo I/O field pro text
+- Text: `OB30 CYCLE TIME OUT OF RANGE`
+- Visibility tag: `"DB_LogRuntime".OB30_CycleTimeOutOfRange`
+- Visibility:
+  - `FALSE` -> skryto
+  - `TRUE` -> zobrazeno
+- Text color: cervena
+- Font: Tahoma, 14, Bold
+- Umisteni: ve stejne diagnosticke oblasti jako Objekt 26
+- V TIA nastav `Animations -> Visibility` nebo `Dynamization -> Visibility` podle verze.
+
 ## 3.4 Spodni navigace
 
-### Objekt 23: Navigation bar
+### Objekt 28: Navigation bar
 - Type: Rectangle
 - Fill: velmi svetle seda
 - Border: 1 px stredne seda
 
-### Objekt 24-30: Tlacitka S1-S7
+### Objekt 29-35: Tlacitka S1-S7
 - Type: Button x7
 - Rozmery a mezery: dle citu, ale konzistentni mezi S1-S7
 - Font: Tahoma, 14, Bold
@@ -289,11 +380,14 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 - `"DB_HMI".LabPSU.DebugAmplitude_A` - sinus amplitude setpoint input
 - `"DB_HMI".Sensors.AI1_Teplota_Lozisko_C` - monitoring
 - `"DB_HMI".Sensors.AI2_Teplota_Kartace_C` - monitoring
-- `"DB_Config".TempHighThreshold_C` - monitoring
+- `"DB_Config".TempHighLoziskoThreshold_C` - threshold loziska
+- `"DB_Config".TempHighKartaceThreshold_C` - threshold kartace
 - `"DB_HMI".Sensors.TM_Rotation_A_Channel` - monitoring
 - `"DB_Status".HMI_StatusText` - status text
 - `"DB_Status".HMI_StatusColor` - status color animation
 - `"DB_LogRuntime".TimeDisplay_HMI` - timer text
+- `"DB_LogRuntime".OB30_AverageCycleTime_ms` - prumer OB30 pro diagnostiku
+- `"DB_LogRuntime".OB30_CycleTimeOutOfRange` - visibility a cervene varovani
 - `"DB_LogRuntime".LastStopLogSaved` - log ulozeno
 - `"DB_LogRuntime".LastError` - posledni chyba
 
@@ -301,7 +395,7 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 
 ## 6.1 Tlacitko AUTO
 
-1. Predpodminka: `Safety.PermitMotion=TRUE`, `DB_LogConfig.Enable=TRUE`, `DB_HMI.LabPSU.Enable=TRUE`.
+1. Predpodminka: `Safety.PermitMotion=TRUE`, `DB_LogConfig.Enable=TRUE` (LabPSU.Enable nastaví PLC při TestActive).
 2. Akce: stisk AUTO.
 3. Ocekavano:
    - Vznikne pulse na `StartTest` a `Spindle.Start`.
@@ -344,7 +438,7 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 
 1. Menit testovaci hodnoty teploty, RPM, prahu.
 2. Ocekavano: aktualni teplota loziska i kartace se zobrazi ve vlastnich polich `Akt`.
-3. Zmenit `"DB_Config".TempHighThreshold_C` a overit, ze se hodnota zobrazi v polich `Max`.
+3. Zmenit `"DB_Config".TempHighLoziskoThreshold_C` a `"DB_Config".TempHighKartaceThreshold_C` a overit, ze se hodnoty zobrazi v prislusnych polich `Max`.
 4. Nastavit simulovanou teplotu kartace nad threshold.
 5. Ocekavano: `"DB_Alarms".TempHighKartace` a `"DB_Alarms".TempAlarm` prejdou na TRUE a safety stav prejde do tripu.
 6. Vyvolat chybu logovani.
@@ -357,10 +451,21 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 3. Vynutit chybu flush.
 4. Ocekavano: text `NO`, cervena.
 
+## 6.8 OB30 cycle-time indikator
+
+1. Pri prumeru `950..1050 ms` overit:
+  - `OB30_CycleTimeOutOfRange = FALSE`.
+  - pole `OB30 avg` a varovani nejsou viditelne.
+2. Nasimulovat nebo vyvolat prumer mimo rozsah, napr. `<950 ms` nebo `>1050 ms`.
+3. Ocekavano:
+  - `OB30_CycleTimeOutOfRange = TRUE`.
+  - zobrazi se prumerna hodnota `OB30_AverageCycleTime_ms`.
+  - hodnota i text `OB30 CYCLE TIME OUT OF RANGE` jsou cervene.
+
 ## 7. Done kriterium pro Screen 1
 
-- Vsechny objekty 1-30 jsou vytvorene a vizualne sedi na layout.
+- Vsechny objekty 1-35 jsou vytvorene a vizualne sedi na layout.
 - Vsechny tag vazby jsou funkcni.
 - Pulse tlacitka funguji spolehlive.
 - Status barvy odpovidaji mape.
-- FAT kroky 6.1-6.7 jsou splnene a zaznamenane.
+- FAT kroky 6.1-6.8 jsou splnene a zaznamenane.

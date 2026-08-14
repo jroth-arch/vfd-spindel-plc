@@ -54,6 +54,8 @@ Tuto tabulku používej pro nastavení před testem. Po nastavení ji není nutn
 | `"DB_HMI".LabPSU.BaseVoltage_V` | `2.0` | základní napětí |
 | `"DB_HMI".LabPSU.DebugAmplitude_A` | `5.0` | maximum celého průběhu `0..A` v SINE_DEBUG |
 | `"DB_HMI".LabPSU.DebugPeriod_min` | `1.0` | perioda SINE_DEBUG |
+| `"DB_Config".TempHighLoziskoThreshold_C` | `65.0` | limit ložiska |
+| `"DB_Config".TempHighKartaceThreshold_C` | `65.0` | limit kartáče |
 | `"DB_LogConfig".StartTest` | `FALSE` | před startem musí být FALSE |
 | `"DB_LogConfig".StopTest` | `FALSE` | před startem musí být FALSE |
 | `"DB_HMI".Spindle.Start` | `FALSE` | před startem musí být FALSE |
@@ -138,6 +140,8 @@ Tuto tabulku sleduj během testu. Pulzní tagy pouze monitoruj; povel vyvolej z 
 | `"DB_LogRuntime".Elapsed_s` | interní sekundy, roste po vzorcích |
 | `"DB_LogRuntime".ElapsedTime_HMI` | HMI text `HHH:MM:SS` |
 | `"DB_LogRuntime".TimeDisplay_HMI` | HMI text elapsed/target |
+| `"DB_LogRuntime".OB30_AverageCycleTime_ms` | průměr OB30 v ms |
+| `"DB_LogRuntime".OB30_CycleTimeOutOfRange` | TRUE mimo 950-1050 ms |
 | `"DB_LogRuntime".SampleCounter` | počet vzorků |
 | `"DB_LogRuntime".HeaderWritten` | hlavička CSV |
 | `"DB_LogRuntime".LastFlushOk` | výsledek posledního flush |
@@ -170,7 +174,7 @@ Tuto tabulku sleduj během testu. Pulzní tagy pouze monitoruj; povel vyvolej z 
 | `"DB_HMI".LabPSU.Enable` | `FALSE` |
 | `"DB_Status".LabPSU.State` | `0` |
 | `"DB_HMI".Spindle.Speed_RPM` | `0.0` |
-| `"DB_LogConfig".Enable` | `FALSE` |
+| `"DB_LogConfig".Enable` | `TRUE` pro další AUTO |
 | `"DB_LogRuntime".LastStopLogSaved` | `TRUE` při úspěšném flush |
 | `"DB_LogRuntime".LastFlushOk` | `TRUE` |
 | `"DB_Status".HMI_StatusText` | `READY - LOG SAVED` |

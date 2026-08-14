@@ -28,7 +28,8 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | LabPSU | `"DB_HMI".LabPSU.DebugPeriod_min` | Real | 1-60 | Setpoint | Perioda sinu [min] (Mode=2) |
 | LabPSU | `"DB_HMI".LabPSU.Cycle_s` | Real | 0.001-1.0 | Setpoint | Časová základna [s] |
 | **KONFIGURACE** | | | | | |
-| Config | `"DB_Config".TempHighThreshold_C` | Real | 0-100 | Setpoint | Práh vysoké teploty [°C] |
+| Config | `"DB_Config".TempHighLoziskoThreshold_C` | Real | 0-100 | Setpoint | Práh vysoké teploty ložiska [°C] |
+| Config | `"DB_Config".TempHighKartaceThreshold_C` | Real | 0-100 | Setpoint | Práh vysoké teploty kartáče [°C] |
 | Config | `"DB_Config".VibCriticalThreshold` | Real | 0-100 | Setpoint | Práh kritických vibrací |
 | **VSTUPNÍ SIMULACE** | | | | | |
 | Sim | `"DB_Config".InputSim.EnableSafetyRelayAuxOverride` | Bool | TRUE/FALSE | Latch | Povolit override safety relé |
@@ -46,8 +47,10 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 |---|---|---|---|
 | **LOG STATUS** | | | |
 | Log | `"DB_LogRuntime".TestActive` | Bool | TRUE = test právě běží |
-| Log | `"DB_LogRuntime".ElapsedTime_HMI` | String[9] | Uplynulý čas ve formátu HHH:MM:SS |
+| Log | `"DB_LogRuntime".ElapsedTime_HMI` | String[9] | Uplynulý čas ve formátu HHH:MM:SS, aktualizace každou sekundu |
 | Log | `"DB_LogRuntime".TimeDisplay_HMI` | String[21] | Uplynulý/cílový čas ve formátu HHH:MM:SS / HHH:MM:SS |
+| Log | `"DB_LogRuntime".OB30_AverageCycleTime_ms` | Real | Průměrný čas cyklu OB30 [ms] |
+| Log | `"DB_LogRuntime".OB30_CycleTimeOutOfRange` | Bool | TRUE = průměr mimo 950-1050 ms; zobrazit červené varování |
 | Log | `"DB_LogRuntime".SampleCounter` | DInt | Počet nahraných vzorků |
 | Log | `"DB_LogRuntime".FileName` | String[32] | Název souboru logu |
 | Log | `"DB_LogRuntime".HeaderWritten` | Bool | CSV hlavička zapsána |
@@ -62,7 +65,7 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | Spindle | `"DB_Status".Spindel.StatusText` | String[40] | Stavový text |
 | **LAB ZDROJ STATUS** | | | |
 | LabPSU | `"DB_Status".LabPSU.VoltageSet_V` | Real | Nastavené napětí [V] |
-| LabPSU | `"DB_Status".LabPSU.CurrentSet_A` | Real | Nastavený proud [A] |
+| LabPSU | `"DB_Status".LabPSU.CurrentSet_A` | Real | Vypočtený aktuální proud [A], pro SINE_DEBUG rozsah 0..A |
 | LabPSU | `"DB_Status".LabPSU.State` | USInt | 0=OFF, 1=CONST, 2=SINE |
 | LabPSU | `"DB_Status".LabPSU.StatusText` | String[40] | Stavový text |
 | **SAFETY STATUS** | | | |
@@ -78,7 +81,9 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | Sensors | `"DB_HMI".Sensors.AI2_Teplota_Kartace_C` | Real | Teplota kartáče [°C] |
 | Sensors | `"DB_HMI".Sensors.TM_Rotation_A_Channel` | Real | Otáčky [RPM] |
 | **ALARMY** | | | |
-| Alarms | `"DB_Alarms".TempHigh` | Bool | Vysoká teplota |
+| Alarms | `"DB_Alarms".TempHighLozisko` | Bool | Vysoká teplota ložiska |
+| Alarms | `"DB_Alarms".TempHighKartace` | Bool | Vysoká teplota kartáče |
+| Alarms | `"DB_Alarms".TempAlarm` | Bool | Společný teplotní alarm |
 | Alarms | `"DB_Alarms".VibCritical` | Bool | Kritické vibrace |
 | **FYZICKÉ VSTUPY** | | | |
 | DI | `"DB_IO".DI.SafetyRelayAuxOk` | Bool | Safety relé AUX OK |
@@ -170,8 +175,8 @@ Kontrolovat: "DB_Status".Safety.PermitMotion == TRUE
 
 ### Krok 2: Vypnout latch tagy
 ```
-"DB_HMI".LabPSU.Enable := FALSE                 // Vypnout lab zdroj
-"DB_LogConfig".Enable := FALSE                  // (volitelně) Vypnout logování
+"DB_HMI".LabPSU.Enable := FALSE                 // PLC vypne zdroj po final flush
+"DB_LogConfig".Enable := TRUE                   // Ponechat povolene pro dalsi AUTO
 ```
 
 ### Krok 3: Ověřit zastavení

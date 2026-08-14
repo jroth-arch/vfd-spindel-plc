@@ -50,10 +50,9 @@ Tato obrazovka je hlavní operátorský pohled.
 | RPM setpoint:     [ 16000 ]   | Prah lozisko:    xx.x C      |
 | Sinusovy proud:   [ 5.0   ]   | Teplota kartace: xx.x C      |
 |                               | Prah kartace:    xx.x C      |
-|                               | Max teplota:     xx.x C      |
-|                               | Aktualni RPM:    xxxxx       |
-|                               | LOG SAVED: YES/NO            |
-|                               | Duvod blokace: text          |
+| [●] VRETENO  RUN CMD          | Aktualni RPM:    xxxxx       |
+| [●] ZDROJ    SINE             | LOG SAVED: YES/NO            |
+| [●] SAFETY   OK               | Duvod blokace: text          |
 |                               | Last error: text             |
 +-------------------------------+------------------------------+
 | NAV: S1 | S2 | S3 | S4 | S5 | S6 | S7                        |
@@ -65,10 +64,19 @@ Tato obrazovka je hlavní operátorský pohled.
 - `"DB_HMI".Spindle.Speed_RPM`
 - `"DB_HMI".LabPSU.DebugAmplitude_A`
 - `"DB_HMI".Sensors.AI1_Teplota_Lozisko_C`
-- `"DB_Config".TempHighThreshold_C`
+- `"DB_Config".TempHighLoziskoThreshold_C`
+- `"DB_Config".TempHighKartaceThreshold_C`
 - `"DB_HMI".Sensors.TM_Rotation_A_Channel`
 - `"DB_Status".HMI_StatusText`
 - `"DB_Status".HMI_StatusColor`
+- `"DB_Status".Spindel.State`
+- `"DB_Status".Spindel.RunLatched`
+- `"DB_Status".Spindel.TripActive`
+- `"DB_Status".LabPSU.State`
+- `"DB_Status".LabPSU.StatusText`
+- `"DB_Status".Safety.SafetyOk`
+- `"DB_Status".Safety.PermitMotion`
+- `"DB_Status".Safety.TripActive`
 - `"DB_LogRuntime".LastStopLogSaved`
 - `"DB_LogRuntime".LastError`
 
@@ -83,24 +91,25 @@ Tato obrazovka je určená pro zdroj a proudový profil.
 | Enable standalone: [ON/OFF]                                 |
 | Rezim: [CONST] [SINUS]  (default SINUS)                     |
 | Max proud rozsah: [ xx.x A ]                                |
-| Pozn.: sinus xx.x A = +/- xx.x/2 na pulvlnu                 |
+| Pozn.: sinus xx.x A = cely prubeh 0..xx.x A                |
 | Perioda: [ xx.x min ]                                        |
 | Base voltage: [ xx.x V ]                                     |
-| Offset: [ xx.x A ]                                           |
 | Amplituda: [ xx.x A ]                                        |
 | Diagnosticky text: text                                      |
 | Aktualni proud: xx.x A   Aktualni napeti: xx.x V             |
 | Current limit exceeded: YES/NO                               |
+| Signalizace vřetena → `"DB_Status".Spindel.State`, `RunLatched`, `TripActive` |
+| Signalizace zdroje → `"DB_Status".LabPSU.State`, `StatusText` |
+| Signalizace safety → `"DB_Status".Safety.SafetyOk`, `PermitMotion`, `TripActive` |
 +--------------------------------------------------------------+
 
 ### Povinné tagy
 - `"DB_HMI".LabPSU.Enable`
 - `"DB_HMI".LabPSU.Mode`
 - `"DB_HMI".LabPSU.DebugAmplitude_A`
-- `"DB_HMI".LabPSU.DebugAmplitude_A`
 - `"DB_HMI".LabPSU.DebugPeriod_min`
 - `"DB_HMI".LabPSU.BaseVoltage_V`
-- `"DB_HMI".LabPSU.CurrentOffset_A`
+- `"DB_HMI".LabPSU.CurrentOffset_A` (deprecated, nepouziva se v SINE_DEBUG)
 - `"DB_Status".LabPSU.StatusText`
 - `"DB_Status".LabPSU.CurrentSet_A`
 - `"DB_Status".LabPSU.VoltageSet_V`

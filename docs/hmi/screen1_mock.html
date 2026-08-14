@@ -213,6 +213,50 @@
     .btn.auto { border-bottom-width: 3px; }
     .btn.stop { border-bottom-width: 3px; }
 
+    .signal-list {
+      margin-top: 14px;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .signal {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .signal-lamp {
+      width: 12px;
+      height: 12px;
+      border: 1px solid #59656e;
+      border-radius: 50%;
+      background: var(--disabled);
+    }
+
+    .signal-lamp.ok { background: var(--ready); }
+    .signal-lamp.run { background: var(--running); }
+    .signal-lamp.warn { background: var(--warning); }
+    .signal-lamp.trip { background: var(--trip); }
+
+    .signal-state {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .cycle-warning {
+      display: none;
+      margin-top: 8px;
+      border-top: 1px solid var(--trip);
+      padding-top: 6px;
+      color: var(--trip);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .status-ok { color: var(--ready); }
     .status-run { color: var(--running); }
     .status-warn { color: var(--warning); }
@@ -279,6 +323,23 @@
       text-align: center;
     }
 
+    .mock-tools {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .mock-tool {
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 12px;
+      padding: 5px 8px;
+      cursor: pointer;
+    }
+
     @media (max-width: 860px) {
       .panel {
         transform: scale(calc((100vw - 32px) / 800));
@@ -317,10 +378,29 @@
         <div class="row">
           <label for="current">Sinusovy proud</label>
           <div>
-            <input id="current" class="io-number" type="number" min="0" max="60" step="0.1" value="5.0" />
+            <input id="current" class="io-number" type="number" min="0" max="38" step="0.1" value="5.0" />
             <span class="unit">A</span>
           </div>
         </div>
+
+        <div class="signal-list" aria-label="Stavove signalizacni objekty">
+          <div class="signal">
+            <span id="spindleLamp" class="signal-lamp"></span>
+            <span>VRETENO</span>
+            <span id="spindleState" class="signal-state">STOPPED</span>
+          </div>
+          <div class="signal">
+            <span id="psuLamp" class="signal-lamp"></span>
+            <span>ZDROJ</span>
+            <span id="psuState" class="signal-state">OFF</span>
+          </div>
+          <div class="signal">
+            <span id="safetyLamp" class="signal-lamp ok"></span>
+            <span>SAFETY</span>
+            <span id="safetyState" class="signal-state">OK</span>
+          </div>
+        </div>
+        <div id="cycleWarning" class="cycle-warning">OB30 CYCLE TIME OUT OF RANGE: <span id="cycleAverage">1000.0</span> ms</div>
       </section>
 
       <section class="right-card">
@@ -376,6 +456,9 @@
     </div>
 
     <div class="help">Simulace: AUTO prepne na RUNNING, STOP prepne na READY a LOG SAVED=YES. Pri RUNNING a RPM=0 se zobrazi WARNING.</div>
+    <div class="mock-tools">
+      <button id="cycleTestBtn" class="mock-tool">Simulovat OB30 alarm</button>
+    </div>
   </div>
 
   <script>
@@ -391,6 +474,15 @@
     const lastError = document.getElementById("lastError");
     const tempEl = document.getElementById("temp");
     const brushTempEl = document.getElementById("brushTemp");
+    const spindleLamp = document.getElementById("spindleLamp");
+    const spindleState = document.getElementById("spindleState");
+    const psuLamp = document.getElementById("psuLamp");
+    const psuState = document.getElementById("psuState");
+    const safetyLamp = document.getElementById("safetyLamp");
+    const safetyState = document.getElementById("safetyState");
+    const cycleWarning = document.getElementById("cycleWarning");
+    const cycleAverage = document.getElementById("cycleAverage");
+    const cycleTestBtn = document.getElementById("cycleTestBtn");
 
     let mode = "READY";
     let testActive = false;
@@ -421,6 +513,26 @@
       logSaved.classList.add(ok ? "status-ok" : "status-trip");
     }
 
+    function setSignals(spindle, psu, safety) {
+      spindleState.textContent = spindle;
+      psuState.textContent = psu;
+      safetyState.textContent = safety;
+      spindleLamp.className = "signal-lamp " + (spindle === "RUN CMD" ? "run" : spindle === "TRIP" ? "trip" : "");
+      psuLamp.className = "signal-lamp " + (psu === "SINE" ? "run" : psu === "TRIP" ? "trip" : "");
+      safetyLamp.className = "signal-lamp " + (safety === "OK" ? "ok" : safety === "WARNING" ? "warn" : "trip");
+    }
+
+    function setCycleAverage(value) {
+      cycleAverage.textContent = value.toFixed(1);
+      cycleWarning.style.display = value < 950 || value > 1050 ? "block" : "none";
+    }
+
+    cycleTestBtn.addEventListener("click", () => {
+      const alarmVisible = cycleWarning.style.display === "block";
+      setCycleAverage(alarmVisible ? 1000.0 : 1100.0);
+      cycleTestBtn.textContent = alarmVisible ? "Simulovat OB30 alarm" : "Resetovat OB30 alarm";
+    });
+
     function formatTimer(sec) {
       const d = Math.floor(sec / 86400);
       const h = Math.floor((sec % 86400) / 3600);
@@ -444,8 +556,10 @@
 
       if (sp === 0) {
         setStatus("WARNING");
+        setSignals("RUN CMD", "SINE", "WARNING");
       } else if (mode !== "TRIP") {
         setStatus("RUNNING");
+        setSignals("RUN CMD", "SINE", "OK");
       }
     }
 
@@ -455,6 +569,7 @@
       timerEl.textContent = formatTimer(elapsedSec);
       setLogSaved(false);
       lastError.textContent = "-";
+      setSignals("RUN CMD", "SINE", "OK");
       updateRunningVisuals();
     });
 
@@ -464,6 +579,7 @@
       setLogSaved(true);
       lastError.textContent = "-";
       actualRpm.textContent = "0";
+      setSignals("STOPPED", "OFF", "OK");
     });
 
     rpmInput.addEventListener("input", () => {
@@ -507,16 +623,20 @@
         setStatus("TRIP");
         setLogSaved(false);
         lastError.textContent = "Bearing temperature alarm";
+        setSignals("TRIP", "TRIP", "TRIP");
       } else if (nextBrush > brushLimit) {
         testActive = false;
         setStatus("TRIP");
         setLogSaved(false);
         lastError.textContent = "Brush temperature alarm";
+        setSignals("TRIP", "TRIP", "TRIP");
       }
     }, 1000);
 
     setStatus("READY");
     setLogSaved(false);
+    setSignals("STOPPED", "OFF", "OK");
+    setCycleAverage(1000.0);
     timerEl.textContent = formatTimer(0);
   </script>
 </body>

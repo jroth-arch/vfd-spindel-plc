@@ -21,10 +21,10 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | **LAB ZDROJ (uhlíky)** | | | | | |
 | LabPSU | `"DB_HMI".LabPSU.Enable` | Bool | TRUE/FALSE | Latch | Povolení lab zdroje |
 | LabPSU | `"DB_HMI".LabPSU.Mode` | USInt | 0,1,2 | Setpoint | 0=OFF, 1=CONST, 2=SINE_DEBUG |
-| LabPSU | `"DB_HMI".LabPSU.ConstCurrent_A` | Real | 0-60 | Setpoint | Konstantní proud [A] (Mode=1) |
+| LabPSU | `"DB_HMI".LabPSU.DebugAmplitude_A` | Real | 0-38 | Setpoint | Maximum celého sinusového průběhu 0..A (Mode=2) |
+| LabPSU | `"DB_HMI".LabPSU.ConstCurrent_A` | Real | 0-60 | Setpoint | Konstantní proud [A] pouze okrajově (Mode=1) |
 | LabPSU | `"DB_HMI".LabPSU.BaseVoltage_V` | Real | 0.8-16 | Setpoint | Základní napětí zdroje [V] |
-| LabPSU | `"DB_HMI".LabPSU.CurrentOffset_A` | Real | 0-60 | Setpoint | DC offset proudu [A] |
-| LabPSU | `"DB_HMI".LabPSU.DebugAmplitude_A` | Real | 0-60 | Setpoint | Amplituda sinu [A] (Mode=2) |
+| LabPSU | `"DB_HMI".LabPSU.CurrentOffset_A` | Real | 0-38 | Deprecated | V SINE_DEBUG se nepoužívá |
 | LabPSU | `"DB_HMI".LabPSU.DebugPeriod_min` | Real | 1-60 | Setpoint | Perioda sinu [min] (Mode=2) |
 | LabPSU | `"DB_HMI".LabPSU.Cycle_s` | Real | 0.001-1.0 | Setpoint | Časová základna [s] |
 | **KONFIGURACE** | | | | | |
@@ -75,6 +75,7 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | HMI | `"DB_Status".HMI_StatusText` | String[24] | Hlavní text status panelu |
 | **SENZORY** | | | |
 | Sensors | `"DB_HMI".Sensors.AI1_Teplota_Lozisko_C` | Real | Teplota ložiska [°C] |
+| Sensors | `"DB_HMI".Sensors.AI2_Teplota_Kartace_C` | Real | Teplota kartáče [°C] |
 | Sensors | `"DB_HMI".Sensors.TM_Rotation_A_Channel` | Real | Otáčky [RPM] |
 | **ALARMY** | | | |
 | Alarms | `"DB_Alarms".TempHigh` | Bool | Vysoká teplota |
@@ -124,7 +125,7 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 
 // LabPSU parametry podle zvoleného režimu
 "DB_HMI".LabPSU.Mode := 1                       // 1=CONST
-"DB_HMI".LabPSU.ConstCurrent_A := 10.0          // 10 A konstantní
+"DB_HMI".LabPSU.DebugAmplitude_A := 5.0          // amplituda sinu 5 A
 "DB_HMI".LabPSU.BaseVoltage_V := 2.0            // 2 V základní
 ```
 
@@ -222,7 +223,7 @@ Kontrolovat: "DB_Status".Spindel.State == 0 (STOPPED)
 |---|---|---|
 | 0 | OFF | - |
 | 1 | CONST | `ConstCurrent_A` |
-| 2 | SINE_DEBUG | `DebugAmplitude_A`, `DebugPeriod_min`, `CurrentOffset_A` |
+| 2 | SINE_DEBUG | `DebugAmplitude_A`, `DebugPeriod_min` (`DebugAmplitude_A` = maximum průběhu 0..A) |
 
 ### Safety Trip Codes (`"DB_Status".Safety.TripCode`)
 | Kód | Význam |
@@ -306,7 +307,7 @@ Kontrolovat: "DB_Status".Spindel.State == 0 (STOPPED)
 ### Panel PARAMETRY
 - Otáčky setpoint → `"DB_HMI".Spindle.Speed_RPM`
 - LabPSU Mode → `"DB_HMI".LabPSU.Mode`
-- LabPSU proud → `"DB_HMI".LabPSU.ConstCurrent_A`
+- Sinusovy proud → `"DB_HMI".LabPSU.DebugAmplitude_A`
 - Test doba → `"DB_LogConfig".TestDuration_s`
 
 ### Panel MONITORING

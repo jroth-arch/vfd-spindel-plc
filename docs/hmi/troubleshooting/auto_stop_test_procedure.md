@@ -58,7 +58,6 @@ V `WT_00_SETUP_AUTO` nastav:
 "DB_HMI".Spindle.Speed_RPM := 12000.0
 "DB_HMI".LabPSU.ConstCurrent_A := 10.0
 "DB_HMI".LabPSU.BaseVoltage_V := 2.0
-"DB_HMI".LabPSU.CurrentOffset_A := 5.0
 "DB_HMI".LabPSU.DebugAmplitude_A := 5.0
 "DB_HMI".LabPSU.DebugPeriod_min := 1.0
 ```
@@ -73,7 +72,8 @@ Pulzní tagy před startem musí být `FALSE`:
 "DB_HMI".Spindle.ResetFault := FALSE
 ```
 
-`DB_HMI.LabPSU.Enable` před AUTO nemusíš nastavovat. Při náběhu `TestActive` ho nastavuje PLC. PLC současně přepne `LabPSU.Mode` na `2` (`SINE_DEBUG`) a `DebugAmplitude_A` na `0.0`.
+`DB_HMI.LabPSU.Enable` před AUTO nemusíš nastavovat. Při náběhu `TestActive` ho nastavuje PLC a současně přepne `LabPSU.Mode` na `2` (`SINE_DEBUG`). Hodnota `DebugAmplitude_A` zadaná na HMI zůstává zachována a použije se pro sinusový proud.
+V režimu `SINE_DEBUG` je `DebugAmplitude_A` maximum celého průběhu `0..A`; `CurrentOffset_A` se v tomto režimu nepoužívá.
 
 ## 4. Preflight před AUTO
 

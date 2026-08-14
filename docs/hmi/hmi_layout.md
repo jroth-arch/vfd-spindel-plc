@@ -48,7 +48,7 @@ Tato obrazovka je hlavní operátorský pohled.
 | OVLADANI                      | MONITORING                   |
 | [AUTO] [STOP]                 | Teplota lozisko: xx.x C      |
 | RPM setpoint:     [ 16000 ]   | Prah lozisko:    xx.x C      |
-| Cyklicky proud:   [ 10.0  ]   | Teplota kartace: xx.x C      |
+| Sinusovy proud:   [ 5.0   ]   | Teplota kartace: xx.x C      |
 |                               | Prah kartace:    xx.x C      |
 |                               | Max teplota:     xx.x C      |
 |                               | Aktualni RPM:    xxxxx       |
@@ -63,7 +63,7 @@ Tato obrazovka je hlavní operátorský pohled.
 - `"DB_LogConfig".StartTest` (AUTO pulse, 200 ms)
 - `"DB_LogConfig".StopTest` (STOP pulse, 200 ms)
 - `"DB_HMI".Spindle.Speed_RPM`
-- `"DB_HMI".LabPSU.ConstCurrent_A`
+- `"DB_HMI".LabPSU.DebugAmplitude_A`
 - `"DB_HMI".Sensors.AI1_Teplota_Lozisko_C`
 - `"DB_Config".TempHighThreshold_C`
 - `"DB_HMI".Sensors.TM_Rotation_A_Channel`
@@ -96,7 +96,7 @@ Tato obrazovka je určená pro zdroj a proudový profil.
 ### Povinné tagy
 - `"DB_HMI".LabPSU.Enable`
 - `"DB_HMI".LabPSU.Mode`
-- `"DB_HMI".LabPSU.ConstCurrent_A`
+- `"DB_HMI".LabPSU.DebugAmplitude_A`
 - `"DB_HMI".LabPSU.DebugAmplitude_A`
 - `"DB_HMI".LabPSU.DebugPeriod_min`
 - `"DB_HMI".LabPSU.BaseVoltage_V`

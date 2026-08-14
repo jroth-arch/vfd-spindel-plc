@@ -52,8 +52,7 @@ Tuto tabulku používej pro nastavení před testem. Po nastavení ji není nutn
 | `"DB_HMI".Spindle.Speed_RPM` | `12000.0` | požadovaný setpoint vřetena |
 | `"DB_HMI".LabPSU.ConstCurrent_A` | `10.0` | používá se pouze v režimu CONST |
 | `"DB_HMI".LabPSU.BaseVoltage_V` | `2.0` | základní napětí |
-| `"DB_HMI".LabPSU.CurrentOffset_A` | `5.0` | offset SINE_DEBUG |
-| `"DB_HMI".LabPSU.DebugAmplitude_A` | `5.0` | amplituda SINE_DEBUG |
+| `"DB_HMI".LabPSU.DebugAmplitude_A` | `5.0` | maximum celého průběhu `0..A` v SINE_DEBUG |
 | `"DB_HMI".LabPSU.DebugPeriod_min` | `1.0` | perioda SINE_DEBUG |
 | `"DB_LogConfig".StartTest` | `FALSE` | před startem musí být FALSE |
 | `"DB_LogConfig".StopTest` | `FALSE` | před startem musí být FALSE |

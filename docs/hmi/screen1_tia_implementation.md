@@ -138,17 +138,19 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
 - Font: Tahoma, 18, Bold
 - Input limit: min 0, max 18000
 
-### Objekt 13: Label `Cyklicky proud`
+### Objekt 13: Label `Sinusovy proud`
 - Type: Static text
 - Font: Tahoma, 14, Regular
 - Color: tmave modro-seda
 
-### Objekt 14: IO pole `Cyklicky proud`
+### Objekt 14: IO pole `Sinusovy proud`
 - Type: I/O field (input)
-- Tag: `"DB_HMI".LabPSU.ConstCurrent_A`
-- Type/range: Real, 0-60
+- Tag: `"DB_HMI".LabPSU.DebugAmplitude_A`
+- Type/range: Real, 0-38 A
 - Font: Tahoma, 18, Bold
-- Input limit: min 0, max 60
+- Input limit: min 0, max 38
+- Pouziva se pro rezim `"DB_HMI".LabPSU.Mode = 2` (`SINE_DEBUG`)
+- Hodnota je maximum celeho sinusoveho prubehu `0..A`; `CurrentOffset_A` se v tomto rezimu nepouziva
 
 ## 3.3 Prava karta MONITORING
 
@@ -175,12 +177,30 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
 - Format: 0.0 `C`
 - Font: Tahoma, 18, Bold
 
-### Objekt 19: Aktualni RPM (value)
+### Objekt 19: Teplota kartace (Akt/Max)
+- Type: I/O field (display) + I/O field (input)
+- Aktualni teplota tag: `"DB_HMI".Sensors.AI2_Teplota_Kartace_C`
+- Max threshold tag: `"DB_Config".TempHighThreshold_C`
+- Aktualni teplota:
+  - Access: Output
+  - Format: 0.0 `C`
+  - Font: Tahoma, 18, Bold
+- Max threshold:
+  - Access: Input
+  - Format: 0.0 `C`
+  - Font: Tahoma, 14-18, Bold
+  - Input limit: min 0, max 100
+- Labely: `Akt:` a `Max:`
+- Barva aktualni hodnoty: tmave modro-seda
+- Barva Max pole: svetle seda; podle potreby dynamizovat pres `Appearance`
+- Poznamka: PLC porovnava aktualni teplotu kartace se stejnym `TempHighThreshold_C`, ktery se pouziva i pro lozisko.
+
+### Objekt 20: Aktualni RPM (value)
 - Type: I/O field (display)
 - Tag: `"DB_HMI".Sensors.TM_Rotation_A_Channel`
 - Font: Tahoma, 18, Bold
 
-### Objekt 20: LOG SAVED (value)
+### Objekt 21: LOG SAVED (value)
 - Type: Symbolic text or IO bool display
 - Tag: `"DB_LogRuntime".LastStopLogSaved`
 - Mapping:
@@ -188,7 +208,7 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
   - TRUE -> `YES`
 - Font: Tahoma, 18, Bold
 
-### Objekt 21: Last error (value)
+### Objekt 22: Last error (value)
 - Type: I/O field (string display)
 - Tag: `"DB_LogRuntime".LastError`
 - Font: Tahoma, 14, Regular
@@ -197,12 +217,12 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
 
 ## 3.4 Spodni navigace
 
-### Objekt 22: Navigation bar
+### Objekt 23: Navigation bar
 - Type: Rectangle
 - Fill: velmi svetle seda
 - Border: 1 px stredne seda
 
-### Objekt 23-29: Tlacitka S1-S7
+### Objekt 24-30: Tlacitka S1-S7
 - Type: Button x7
 - Rozmery a mezery: dle citu, ale konzistentni mezi S1-S7
 - Font: Tahoma, 14, Bold
@@ -237,7 +257,7 @@ Aplikovat color animation na Objekt 20 podle `"DB_LogRuntime".LastStopLogSaved`:
 
 Pouzij tento postup pro kazdy prvek, ktery ma menit barvu podle tagu:
 
-1. Otevri vlastnosti objektu (napr. text `HMI_StatusText` nebo indikator `LOG SAVED`).
+1. Otevri vlastnosti objektu (napr. text `HMI_StatusText`, indikator `LOG SAVED` nebo Max pole teploty kartace).
 2. Najdi sekci `Animations` nebo `Dynamization` (podle verze TIA).
 3. Zvol vlastnost, kterou chces menit:
   - pro stavovy text obvykle `Text color`
@@ -266,8 +286,9 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 - `"DB_HMI".Spindle.Start` - AUTO pulse
 - `"DB_HMI".Spindle.Stop` - STOP pulse
 - `"DB_HMI".Spindle.Speed_RPM` - setpoint input
-- `"DB_HMI".LabPSU.ConstCurrent_A` - setpoint input
+- `"DB_HMI".LabPSU.DebugAmplitude_A` - sinus amplitude setpoint input
 - `"DB_HMI".Sensors.AI1_Teplota_Lozisko_C` - monitoring
+- `"DB_HMI".Sensors.AI2_Teplota_Kartace_C` - monitoring
 - `"DB_Config".TempHighThreshold_C` - monitoring
 - `"DB_HMI".Sensors.TM_Rotation_A_Channel` - monitoring
 - `"DB_Status".HMI_StatusText` - status text
@@ -304,11 +325,11 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 3. Zadani hodnoty mimo rozsah (napr. 25000).
 4. Ocekavano: HMI odmita nebo oreze dle limitu.
 
-## 6.4 Pole Cyklicky proud
+## 6.4 Pole Sinusovy proud
 
-1. Zadani hodnoty 10.0.
-2. Ocekavano: zapis na `LabPSU.ConstCurrent_A`.
-3. Zadani 100.0.
+1. Zadani hodnoty 10.0 A.
+2. Ocekavano: zapis na `LabPSU.DebugAmplitude_A`.
+3. Zadani 100.0 A.
 4. Ocekavano: HMI odmita nebo oreze na limit 60.
 
 ## 6.5 Status panel
@@ -322,9 +343,12 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 ## 6.6 Monitoring hodnot
 
 1. Menit testovaci hodnoty teploty, RPM, prahu.
-2. Ocekavano: hodnoty na S1 se aktualizuji bez viditelneho zpozdeni.
-3. Vyvolat chybu logovani.
-4. Ocekavano: `LastError` se zobrazi, text se nezkrati pod kritickou informaci.
+2. Ocekavano: aktualni teplota loziska i kartace se zobrazi ve vlastnich polich `Akt`.
+3. Zmenit `"DB_Config".TempHighThreshold_C` a overit, ze se hodnota zobrazi v polich `Max`.
+4. Nastavit simulovanou teplotu kartace nad threshold.
+5. Ocekavano: `"DB_Alarms".TempHighKartace` a `"DB_Alarms".TempAlarm` prejdou na TRUE a safety stav prejde do tripu.
+6. Vyvolat chybu logovani.
+7. Ocekavano: `LastError` se zobrazi, text se nezkrati pod kritickou informaci.
 
 ## 6.7 LOG SAVED indikator
 
@@ -335,7 +359,7 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 
 ## 7. Done kriterium pro Screen 1
 
-- Vsechny objekty 1-29 jsou vytvorene a vizualne sedi na layout.
+- Vsechny objekty 1-30 jsou vytvorene a vizualne sedi na layout.
 - Vsechny tag vazby jsou funkcni.
 - Pulse tlacitka funguji spolehlive.
 - Status barvy odpovidaji mape.

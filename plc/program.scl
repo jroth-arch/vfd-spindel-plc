@@ -524,7 +524,7 @@ NON_RETAIN
 			BaseVoltage_V : Real;     // napeti zdroje [V] – default 2.0
 			DebugAmplitude_A : Real;  // amplituda sinusoidy [A] – default 5.0
 			DebugPeriod_min : Real;   // perioda sinusoidy [min] – default 1.0 min
-			CurrentOffset_A : Real;   // DC offset proudu [A] – min = DebugAmplitude_A
+			CurrentOffset_A : Real;   // deprecated: v SINE_DEBUG se nepouziva
 			ConstCurrent_A : Real;    // proud v CONST rezimu [A] – default 10.0
 			MaxCurrent_A : Real;      // maximalni povoleny proud [A] – default 38.0
 			CurrentLimitExceeded : Bool;  // TRUE = zadany proud prekrocil MaxCurrent_A
@@ -723,6 +723,7 @@ BEGIN
 	    #State := 0;
 	    #StatusText := 'SAFE OFF';
 	    #CurrentLimitExceeded := false;
+	    #prevMode := 0;
 	    RETURN;
 	END_IF;
 	
@@ -787,7 +788,7 @@ BEGIN
 	    2: // SINE_DEBUG
 	        // Pri prvnim vstupu do SINE rezimu resetovat fazi na -pi/2, aby prubeh zacinali od 0A
 	        IF #prevMode <> 2 THEN
-	            #phase_rad := -1.5707963;  // -pi/2 rad, aby SIN(-pi/2) = -1 -> proud = offset - amplitude = 0A
+	            #phase_rad := -1.5707963;  // -pi/2 rad, zacatek prubehu od 0 A
 	            #SineCycleCounter := 0;  // reset pocitadla cyklu pri vstupu do SINE rezimu
 	        END_IF;
 	        
@@ -798,6 +799,10 @@ BEGIN
 	            #omega := 0.0; // ochrana proti deleni nulou
 	        END_IF;
 	        #offsetAutoAdjusted := FALSE;
+	        IF #prevMode <> 2 THEN
+	            // Prvni vypocet po vstupu do rezimu zacne presne na 0 A.
+	            #phase_rad := -1.5707963 - (#omega * #Cycle_s);
+	        END_IF;
 	        
 	        #phase_rad := #phase_rad + (#omega * #Cycle_s);
 	        
@@ -809,13 +814,10 @@ BEGIN
 	        
 	        #sineValue := SIN(#phase_rad);
 	        
-	        // sinus s offsetem
-	        #effectiveOffset_A := #CurrentOffset_A;
-	        IF #effectiveOffset_A < #DebugAmplitude_A THEN
-	            #effectiveOffset_A := #DebugAmplitude_A;
-	            #offsetAutoAdjusted := TRUE;
-	        END_IF;
-	        #targetCurrent_A := #effectiveOffset_A + (#DebugAmplitude_A * #sineValue);
+	        // Cely sinus posunuty do rozsahu 0..A.
+	        // DebugAmplitude_A je maximum prubehu, CurrentOffset_A se v SINE_DEBUG nepouziva.
+	        #targetCurrent_A := (#DebugAmplitude_A * 0.5)
+	                          + ((#DebugAmplitude_A * 0.5) * #sineValue);
 	        
 	        // detekce prekroceni limitu - pred clampingem
 	        IF #targetCurrent_A > #PSU_MaxCurrent_A THEN
@@ -835,11 +837,7 @@ BEGIN
 	        #CurrentSet_A := #targetCurrent_A;
 	        
 	        #State := 2;
-	        IF #offsetAutoAdjusted THEN
-	            #StatusText := 'SINE DEBUG (AUTO OFFSET)';
-	        ELSE
-	            #StatusText := 'SINE DEBUG';
-	        END_IF;
+	        #StatusText := 'SINE DEBUG 0..A';
 	        
 	    ELSE
 	        #CurrentSet_A := 0.0;
@@ -1956,7 +1954,6 @@ BEGIN
 	IF "DB_LogRuntime".TestActive AND NOT "DB_LogRuntime".TestActivePrev THEN
 		"DB_HMI".LabPSU.Enable := TRUE;
 		"DB_HMI".LabPSU.Mode := 2;  // SINE_DEBUG
-		"DB_HMI".LabPSU.DebugAmplitude_A := 0.0;  // start z nuly
 		"DB_LogRuntime".LastStopLogSaved := FALSE;
 	END_IF;
 
@@ -1969,7 +1966,6 @@ BEGIN
 		AND NOT "LogFlushToSd".AckFlush THEN
 		"DB_HMI".LabPSU.Enable := FALSE;
 		"DB_HMI".LabPSU.Mode := 2;  // dalsi AUTO startuje v SINE rezimu
-		"DB_HMI".LabPSU.DebugAmplitude_A := 0.0;
 		"DB_HMI".Spindle.Speed_RPM := 0.0;
 		"DB_LogConfig".Enable := FALSE;
 		"DB_LogRuntime".LastStopLogSaved := "DB_LogRuntime".LastFlushOk;

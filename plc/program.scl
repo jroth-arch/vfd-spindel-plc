@@ -64,10 +64,13 @@ VERSION : 0.1
 		T_Uhliky : Real;                   // teplota uhliku/kartacu [degC] – zatim 0.0
 		Vibrace : Real;                    // vibrace – zatim 0.0
 		ProudUhliky : Real;                // proud do uhliku [A], prepocitany z AQ1_CurrentCtrl_V
+		PrumerKrouzku_mm : Real;           // efektivni prumer sberaciho krouzku [mm]
 		State : USInt;                     // stav vretene: 0=STOP 1=RUN 2=STOPPING 3=TRIP
 		RunLatched : Bool;                 // vreteno v provozu (latch z FB_DriveCtrl)
 		TripActive : Bool;                 // safety trip aktivni
 		TripCode : USInt;                  // kod tripu: 0=OK 1=ESTOP 2=RELAY 3=EXT 4=TEMP 5=VIB 6=DISABLE
+		TempHighLozisko : Bool;            // prekrocena teplota loziska
+		TempHighKartace : Bool;            // prekrocena teplota kartacu
 		SafetyText : String[40];           // textova diagnostika safety brany
 		SampleEveryN_Cycles : Int := 6;    // pocet cyklu OB30 mezi vzorky → 6×1s = 6s/vzorek
 		TestDuration_s : DInt := 1814400;  // max delka testu [s] – timeout vypnut, beha do manualniko stopu
@@ -87,6 +90,7 @@ VERSION : 0.1
 	VAR
 		prevStartTest : Bool := FALSE;
 		prevStopTest : Bool := FALSE;
+		prevTripActive : Bool := FALSE;
 		cycleCounter : Int := 0;
 		flushCounter : Int := 0;
 		StopReason : USInt := 0;  // 0=running, 1=manual stop, 2=timeout, 3=trip/fault
@@ -181,6 +185,7 @@ BEGIN
 		"DB_LogRuntime".LastFlushOk := FALSE;  // Jeste neprobehl zadny flush
 		"DB_LogRuntime".MaxTempLozisko_C := 0.0;  // Reset max teploty pri startu testu
 		"DB_LogRuntime".MaxTempUhliky_C := 0.0;   // Reset max teploty pri startu testu
+		"DB_LogRuntime".UjetaVzdalenost_km := 0.0;
 		StopReason := 0;  // Reset stop reason - test běží
 		// (event log: TEST_START)
 	END_IF;
@@ -199,6 +204,7 @@ BEGIN
 		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Uhliky := T_Uhliky;
 		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].Vibrace := Vibrace;
 		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].ProudUhliky := ProudUhliky;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].UjetaVzdalenost_km := "DB_LogRuntime".UjetaVzdalenost_km;
 		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].State := State;
 		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RunLatched := RunLatched;
 		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripActive := TripActive;
@@ -217,8 +223,55 @@ BEGIN
 		// (event log: TEST_STOP)
 	END_IF;
 
+	// Detekce bezpecnostni poruchy (hrana) - ulozit finalni zaznam a spustit finalni flush.
+	IF Enable AND "DB_LogRuntime".TestActive AND TripActive AND NOT prevTripActive THEN
+		"DB_LogRuntime".StopSequenceActive := TRUE;
+		"DB_LogRuntime".LastStopLogSaved := FALSE;
+		StopReason := 3;  // Safety trip/fault
+
+		IF TempHighLozisko AND TempHighKartace THEN
+			"DB_LogRuntime".LastError := 'PREKROCENA TEPLOTA LOZISKA A KARTACU';
+		ELSIF TempHighLozisko THEN
+			"DB_LogRuntime".LastError := 'PREKROCENA TEPLOTA LOZISKA';
+		ELSIF TempHighKartace THEN
+			"DB_LogRuntime".LastError := 'PREKROCENA TEPLOTA KARTACU';
+		ELSE
+			CASE TripCode OF
+				1: "DB_LogRuntime".LastError := 'Nouzové tlačítko stisknuto';
+				2: "DB_LogRuntime".LastError := 'ZKONTROLUJ BEZPECNOSTNI RELE';
+				3: "DB_LogRuntime".LastError := 'PORUCHA EXTERNIHO ZARIZENI';
+				5: "DB_LogRuntime".LastError := 'KRITICKE VIBRACE';
+				ELSE "DB_LogRuntime".LastError := SafetyText;
+			END_CASE;
+		END_IF;
+
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].t_s := "DB_LogRuntime".Elapsed_s;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RPM := RPM;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Lozisko := T_Lozisko;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Uhliky := T_Uhliky;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].Vibrace := Vibrace;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].ProudUhliky := ProudUhliky;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].UjetaVzdalenost_km := "DB_LogRuntime".UjetaVzdalenost_km;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].State := State;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RunLatched := RunLatched;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripActive := TripActive;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripCode := TripCode;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].SafetyText := SafetyText;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TestActive := FALSE;
+		"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].StopReason := StopReason;
+		"DB_LogBuffer".TrendWriteIdx := "DB_LogBuffer".TrendWriteIdx + 1;
+		IF "DB_LogBuffer".TrendWriteIdx > 999 THEN
+			"DB_LogBuffer".TrendWriteIdx := 0;
+		END_IF;
+
+		"DB_LogRuntime".TestActive := FALSE;
+		FlushPending := TRUE;
+		LastFlushTrigger := 3;  // safety trip final flush
+	END_IF;
+
 	prevStartTest := StartTest;
 	prevStopTest := StopTest;
+	prevTripActive := TripActive;
 
 	// Handshake: FB_LogFlushToSd potvrdil flush -> resetovat FlushPending
 	// AckFlush zustane TRUE dokud FlushPending neklesne (4-way handshake)
@@ -242,6 +295,10 @@ BEGIN
 			IN1 := "DB_LogRuntime".TimeDisplay_HMI,
 			IN2 := "DB_LogRuntime".TargetTime_HMI
 		);
+		IF PrumerKrouzku_mm > 0.0 THEN
+			"DB_LogRuntime".UjetaVzdalenost_km := "DB_LogRuntime".UjetaVzdalenost_km
+				+ ((RPM * 3.1415926 * PrumerKrouzku_mm) / 60000000.0);
+		END_IF;
 
 		IF cycleCounter >= SampleEveryN_Cycles THEN
 			cycleCounter := 0;
@@ -253,6 +310,7 @@ BEGIN
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].T_Uhliky := T_Uhliky;
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].Vibrace := Vibrace;
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].ProudUhliky := ProudUhliky;
+			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].UjetaVzdalenost_km := "DB_LogRuntime".UjetaVzdalenost_km;
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].State := State;
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].RunLatched := RunLatched;
 			"DB_LogBuffer".TrendBuffer["DB_LogBuffer".TrendWriteIdx].TripActive := TripActive;
@@ -318,6 +376,7 @@ VERSION : 0.1
 		T_Uhliky : Real;
 		Vibrace : Real;
 		ProudUhliky : Real;
+		UjetaVzdalenost_km : Real;
 		State : USInt;
 		RunLatched : Bool;
 		TripActive : Bool;
@@ -363,6 +422,8 @@ BEGIN
 	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.Vibrace));
 	line := CONCAT(IN1 := line, IN2 := ',');
 	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.ProudUhliky));
+	line := CONCAT(IN1 := line, IN2 := ',');
+	line := CONCAT(IN1 := line, IN2 := REAL_TO_STRING(Rec.UjetaVzdalenost_km));
 	line := CONCAT(IN1 := line, IN2 := ',');
 	line := CONCAT(IN1 := line, IN2 := USINT_TO_STRING(Rec.State));
 	line := CONCAT(IN1 := line, IN2 := ',');
@@ -445,6 +506,7 @@ NON_RETAIN
 		// Maximalni teploty behem testu
 		MaxTempLozisko_C : Real;       // max teplota loziska od startu testu [degC]
 		MaxTempUhliky_C : Real;        // max teplota uhliku/kartacu od startu testu [degC]
+		UjetaVzdalenost_km : Real;     // ujetá vzdalenost po sberacim krouzku od startu testu [km]
 		// OB30 cycle time monitoring
 		OB30_LastTs : DTL;             // posledni cas zacatku OB30 cyklu
 		OB30_CycleTime_ms : Int;       // delka aktualniho OB30 cyklu [ms]
@@ -474,6 +536,7 @@ BEGIN
 	TimeDisplay_HMI := '000:00:00 / 000:00:00';
 	MaxTempLozisko_C := 0.0;
 	MaxTempUhliky_C := 0.0;
+	UjetaVzdalenost_km := 0.0;
 	OB30_CycleTime_ms := 0;
 	OB30_MaxCycleTime_ms := 0;
 	OB30_MinCycleTime_ms := 1000;
@@ -1290,6 +1353,7 @@ NON_RETAIN
 		TempHighThreshold_C : Real;   // deprecated: legacy common threshold
 		TempHighLoziskoThreshold_C : Real;   // prah teploty loziska [degC]
 		TempHighKartaceThreshold_C : Real;   // prah teploty kartace [degC]
+		PrumerKrouzku_mm : Real;             // efektivni prumer sberaciho krouzku [mm]
 		VibCriticalThreshold : Real;  // prahova hodnota vibraci – default 0.0 (senzor nezapojen)
 		DAC_MaxDacRange : Int;        // max hodnota DAC pro 10V (S7-1200) – default 27648
 		InputSim : Struct
@@ -1310,6 +1374,7 @@ BEGIN
 	TempHighThreshold_C := 65.0;
 	TempHighLoziskoThreshold_C := 65.0;
 	TempHighKartaceThreshold_C := 65.0;
+	PrumerKrouzku_mm := 0.0;
 	VibCriticalThreshold := 0.0;
 	DAC_MaxDacRange := 27648;
 	InputSim.EnableSafetyRelayAuxOverride := false;
@@ -1583,7 +1648,7 @@ BEGIN
 
 		STEP_WR_HEADER:
 			IF NOT writeStarted THEN
-				CsvLine := 't_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,State,RunLatched,TripActive,TripCode,SafetyText,TestActive,StopReason';
+				CsvLine := 't_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,UjetaVzdalenost_km,State,RunLatched,TripActive,TripCode,SafetyText,TestActive,StopReason';
 				csvLen := LEN(CsvLine);
 				FOR i := 0 TO 253 DO
 					CsvBytes[i] := 0;
@@ -1818,10 +1883,13 @@ BEGIN
 		T_Uhliky := "DB_HMI".Sensors.AI2_Teplota_Kartace_C,
 		Vibrace := 0.0,       // TODO: napojit na skutecny senzor vibraci
 		ProudUhliky := "DB_Status".LabPSU.CurrentSet_A,
+		PrumerKrouzku_mm := "DB_Config".PrumerKrouzku_mm,
 		State := "DB_Status".Spindel.State,
 		RunLatched := "DB_Status".Spindel.RunLatched,
 		TripActive := "DB_Status".Safety.TripActive,
 		TripCode := "DB_Status".Safety.TripCode,
+		TempHighLozisko := "DB_Alarms".TempHighLozisko,
+		TempHighKartace := "DB_Alarms".TempHighKartace,
 		SafetyText := "DB_Status".Safety.StatusText,
 		SampleEveryN_Cycles := 6,
 		TestDuration_s := "DB_LogConfig".TestDuration_s,

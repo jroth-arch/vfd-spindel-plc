@@ -455,6 +455,57 @@ Ucel: overit, ze soubor na SD karte obsahuje spravnou hlavicku a datove radky.
 
 ---
 
+### LOG-11 – Finalni flush pri prekroceni teploty loziska
+
+Ucel: overit, ze safety porucha behem aktivniho testu vytvori finalni zaznam, ukonci test a ulozi log na SD kartu.
+
+#### Predpodminka
+- Produkcni PLC s fyzickou SD kartou.
+- Test bezi a obsahuje alespon jeden trendovy vzorek.
+- Teplota loziska je pod `"DB_Config".TempHighLoziskoThreshold_C`.
+
+#### Postup
+1. Spust test a pockej, az `"DB_LogRuntime".SampleCounter > 0`.
+2. Vyvolej prekroceni schvaleneho limitu teploty loziska podle produkcniho testovaciho postupu.
+3. Over okamzite bezpecnostni odstaveni vretene a zdroje.
+4. Over, ze `"DB_LogRuntime".TestActive = FALSE`, `"LogManager".FlushPending = TRUE` a posledni zaznam ma `StopReason = 3`.
+5. Over `"DB_LogRuntime".LastError = 'PREKROCENA TEPLOTA LOZISKA'`.
+6. Pockej na dokonceni finalniho flushe.
+7. Over `"DB_LogRuntime".LastStopLogSaved = TRUE` a `"DB_LogRuntime".LastFlushOk = TRUE`.
+8. Otevri CSV z SD karty a over, ze obsahuje finalni radek s `TripActive = 1`, `TripCode = 4` a `StopReason = 3`.
+
+> **Status: HW_ONLY** – tento test provadej pouze na produkcnim PLC. Nepouzivej PLCSIM Advanced ani WinCC.
+
+---
+
+### LOG-12 – Ujeta vzdalenost
+
+Ucel: overit vypocet ujeté vzdalenosti z aktualnich RPM a efektivniho prumeru sberaciho krouzku.
+
+#### Predpodminka
+- Prumer krouzku je na S7 nastaven na znamou hodnotu v rozsahu `1.0..500.0 mm`.
+- Testovaci RPM jsou stabilni a zname.
+
+#### Postup
+1. V TIA Portal proved compile, potom over scenar v PLCSIM Advanced s WinCC.
+2. Na produkcnim PLC nastav `"DB_Config".PrumerKrouzku_mm` napr. na `100.0` a zaznamenej skutecne RPM.
+3. Spust novy test a over `"DB_LogRuntime".UjetaVzdalenost_km = 0.00` pri startu.
+4. Nech test bezet znamy pocet sekund a over, ze `UjetaVzdalenost_km` roste.
+5. Vypocti referencni hodnotu:
+
+$$
+s_{\mathrm{km}} = \frac{\mathrm{RPM} \cdot t_{\mathrm{s}} \cdot \pi \cdot D_{\mathrm{mm}}}{60\,000\,000}
+$$
+
+6. Porovnej runtime hodnotu s referencnim vypoctem podle skutecnych RPM.
+7. Proved STOP a over, ze vzdalenost zustane zobrazena na S1 HOME.
+8. Otevri CSV a over sloupec `UjetaVzdalenost_km` vcetne finalniho zaznamu.
+9. Zopakuj ukonceni safety poruchou a over zachovani hodnoty po finalnim flushi.
+
+> **Status: HW_ONLY** – konecne overeni provadej na produkcnim PLC s fyzickou SD kartou.
+
+---
+
 ## Evidence pro předání zákazníkovi
 
 Pro každý SAT scénář ulož:

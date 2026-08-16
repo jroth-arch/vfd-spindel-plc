@@ -28,8 +28,9 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | LabPSU | `"DB_HMI".LabPSU.DebugPeriod_min` | Real | 1-60 | Setpoint | Perioda sinu [min] (Mode=2) |
 | LabPSU | `"DB_HMI".LabPSU.Cycle_s` | Real | 0.001-1.0 | Setpoint | Časová základna [s] |
 | **KONFIGURACE** | | | | | |
-| Config | `"DB_Config".TempHighLoziskoThreshold_C` | Real | 0-100 | Setpoint | Práh vysoké teploty ložiska [°C] |
-| Config | `"DB_Config".TempHighKartaceThreshold_C` | Real | 0-100 | Setpoint | Práh vysoké teploty kartáče [°C] |
+| Config | `"DB_Config".TempHighLoziskoThreshold_C` | Real | 0-100 | Setpoint | Prah vysoke teploty loziska [C]; zapis pouze v chranenem panelu S7 SERVICE |
+| Config | `"DB_Config".TempHighKartaceThreshold_C` | Real | 0-100 | Setpoint | Prah vysoke teploty kartacu [C]; zapis pouze v chranenem panelu S7 SERVICE |
+| Config | `"DB_Config".PrumerKrouzku_mm` | Real | 1-500 | Setpoint | Efektivni prumer sberaciho krouzku [mm]; zapis pouze v chranenem panelu S7 SERVICE |
 | Config | `"DB_Config".VibCriticalThreshold` | Real | 0-100 | Setpoint | Práh kritických vibrací |
 | **VSTUPNÍ SIMULACE** | | | | | |
 | Sim | `"DB_Config".InputSim.EnableSafetyRelayAuxOverride` | Bool | TRUE/FALSE | Latch | Povolit override safety relé |
@@ -58,6 +59,9 @@ Tento dokument obsahuje všechny HMI tagy pro řízení a monitoring testovacíh
 | Log | `"DB_LogRuntime".LastStopLogSaved` | Bool | Poslední STOP dokončen a log uložen na SD |
 | Log | `"DB_LogRuntime".FlushErrorCount` | Int | Počet chyb flush |
 | Log | `"DB_LogRuntime".LastError` | String[40] | Text poslední chyby |
+| Log | `"DB_LogRuntime".MaxTempLozisko_C` | Real | Maximalni namerena teplota loziska od startu testu; S1 HOME pouze pro cteni |
+| Log | `"DB_LogRuntime".MaxTempUhliky_C` | Real | Maximalni namerena teplota kartacu od startu testu; S1 HOME pouze pro cteni |
+| Log | `"DB_LogRuntime".UjetaVzdalenost_km` | Real | Ujeta vzdalenost po sberacim krouzku od startu testu [km]; S1 HOME pouze pro cteni |
 | **VŘETENO STATUS** | | | |
 | Spindle | `"DB_Status".Spindel.RunLatched` | Bool | Příkaz k běhu aktivní |
 | Spindle | `"DB_Status".Spindel.TripActive` | Bool | Interlock aktivní |

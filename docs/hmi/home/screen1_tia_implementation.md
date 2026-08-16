@@ -5,7 +5,7 @@ Scope je pouze Screen 1.
 
 ## 1. Vstupni podminky
 
-- V projektu existuji PLC tagy podle `hmi_tag_table.md`.
+- V projektu existuji PLC tagy podle `../hmi_tag_table.md`.
 - V TIA je vytvorena obrazovka `S1_HOME`.
 - Pouzivat pouze styl Industrial Classic dle layout standardu.
 
@@ -171,35 +171,44 @@ Poznamka: Nepouzivat `TestStartTs` ani `OB30_LastTs` pro zobrazeni timeru. Jsou 
 - Format: 0.0 `C`
 - Font: Tahoma, 18, Bold
 
-### Objekt 18: Prah lozisko (value)
+### Objekt 18: Max. teplota lozisko (value)
 - Type: I/O field (display)
-- Tag: `"DB_Config".TempHighLoziskoThreshold_C`
-- Access: Input
+- Tag: `"DB_LogRuntime".MaxTempLozisko_C`
+- Access: Output
 - Format: 0.0 `C`
 - Font: Tahoma, 18, Bold
+- Label: `Max:`
+- Poznamka: PLC hodnotu vynuluje pri startu noveho testu a behem testu uklada nejvyssi namerenou teplotu loziska. Po stopu zustava hodnota viditelna az do dalsiho startu testu.
 
 ### Objekt 19: Teplota kartace (Akt/Max)
-- Type: I/O field (display) + I/O field (input)
+- Type: I/O field (display) + I/O field (display)
 - Aktualni teplota tag: `"DB_HMI".Sensors.AI2_Teplota_Kartace_C`
-- Max threshold tag: `"DB_Config".TempHighKartaceThreshold_C`
+- Max. namerena teplota tag: `"DB_LogRuntime".MaxTempUhliky_C`
 - Aktualni teplota:
   - Access: Output
   - Format: 0.0 `C`
   - Font: Tahoma, 18, Bold
-- Max threshold:
-  - Access: Input
+- Max. namerena teplota:
+  - Access: Output
   - Format: 0.0 `C`
   - Font: Tahoma, 14-18, Bold
-  - Input limit: min 0, max 100
 - Labely: `Akt:` a `Max:`
 - Barva aktualni hodnoty: tmave modro-seda
-- Barva Max pole: svetle seda; podle potreby dynamizovat pres `Appearance`
-- Poznamka: PLC porovnava teplotu loziska a kartace se samostatnymi threshold tagy.
+- Barva Max pole: tmave modro-seda
+- Poznamka: PLC hodnotu vynuluje pri startu noveho testu a behem testu uklada nejvyssi namerenou teplotu kartacu. Po stopu zustava hodnota viditelna az do dalsiho startu testu. Teplotni limity jsou nastavitelne pouze v chranenem panelu S7 SERVICE.
 
 ### Objekt 20: Aktualni RPM (value)
 - Type: I/O field (display)
 - Tag: `"DB_HMI".Sensors.TM_Rotation_A_Channel`
 - Font: Tahoma, 18, Bold
+
+### Objekt 20a: Ujeta vzdalenost
+- Type: I/O field (Output)
+- Tag: `"DB_LogRuntime".UjetaVzdalenost_km`
+- Format: `0.0000`
+- Label: `Ujeta vzdalenost [km]`
+- Font: Tahoma, 18, Bold
+- Poznamka: PLC hodnotu vynuluje pri startu noveho testu. Behem aktivniho testu ji pocita z aktualnich RPM a nakonfigurovaneho prumeru sberaciho krouzku; po STOP nebo poruse zustava viditelna az do dalsiho startu.
 
 ### Objekt 21: LOG SAVED (value)
 - Type: Symbolic text or IO bool display
@@ -380,8 +389,9 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 - `"DB_HMI".LabPSU.DebugAmplitude_A` - sinus amplitude setpoint input
 - `"DB_HMI".Sensors.AI1_Teplota_Lozisko_C` - monitoring
 - `"DB_HMI".Sensors.AI2_Teplota_Kartace_C` - monitoring
-- `"DB_Config".TempHighLoziskoThreshold_C` - threshold loziska
-- `"DB_Config".TempHighKartaceThreshold_C` - threshold kartace
+- `"DB_LogRuntime".MaxTempLozisko_C` - maximalni namerena teplota loziska
+- `"DB_LogRuntime".MaxTempUhliky_C` - maximalni namerena teplota kartacu
+- `"DB_LogRuntime".UjetaVzdalenost_km` - ujetá vzdalenost po sberacim krouzku
 - `"DB_HMI".Sensors.TM_Rotation_A_Channel` - monitoring
 - `"DB_Status".HMI_StatusText` - status text
 - `"DB_Status".HMI_StatusColor` - status color animation
@@ -436,13 +446,16 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 
 ## 6.6 Monitoring hodnot
 
-1. Menit testovaci hodnoty teploty, RPM, prahu.
-2. Ocekavano: aktualni teplota loziska i kartace se zobrazi ve vlastnich polich `Akt`.
-3. Zmenit `"DB_Config".TempHighLoziskoThreshold_C` a `"DB_Config".TempHighKartaceThreshold_C` a overit, ze se hodnoty zobrazi v prislusnych polich `Max`.
-4. Nastavit simulovanou teplotu kartace nad threshold.
-5. Ocekavano: `"DB_Alarms".TempHighKartace` a `"DB_Alarms".TempAlarm` prejdou na TRUE a safety stav prejde do tripu.
-6. Vyvolat chybu logovani.
-7. Ocekavano: `LastError` se zobrazi, text se nezkrati pod kritickou informaci.
+1. Test proved pouze na produkcnim PLC; nepouzivej PLCSIM Advanced ani WinCC.
+2. Pred startem testu zapis aktualni hodnoty `MaxTempLozisko_C` a `MaxTempUhliky_C`.
+3. Spust test tlacitkem AUTO.
+4. Ocekavano: obe hodnoty `Max` se pri startu vynuluji na `0.0 C` a behem testu se rovnaji nebo jsou vyssi nez odpovidajici hodnota `Akt`.
+5. Zastav test tlacitkem STOP.
+6. Ocekavano: obe hodnoty `Max` zustanou zobrazene beze zmeny po ukonceni testu.
+7. Spust novy test.
+8. Ocekavano: obe hodnoty `Max` se opet vynuluji na `0.0 C`.
+9. Over, ze HOME neobsahuje zapisovatelne pole teplotniho limitu.
+10. Over, ze `UjetaVzdalenost_km` se pri AUTO vynuluje, behem testu roste a po STOP nebo poruse zustane zachovana.
 
 ## 6.7 LOG SAVED indikator
 
@@ -469,3 +482,4 @@ Poznamka: pokud TIA verze neumi podminenou animaci blikani primo na objektu, pou
 - Pulse tlacitka funguji spolehlive.
 - Status barvy odpovidaji mape.
 - FAT kroky 6.1-6.8 jsou splnene a zaznamenane.
+- HOME zobrazuje pouze aktualni a maximalni namerene teploty; teplotni limity nejsou na HOME zapisovatelne.

@@ -46,16 +46,17 @@ Tato obrazovka je hlavní operátorský pohled.
 | HOME | Stav: READY/RUNNING/TRIP | Timer: D:HH:MM:SS         |
 +-------------------------------+------------------------------+
 | OVLADANI                      | MONITORING                   |
-| [AUTO] [STOP]                 | Teplota lozisko: xx.x C      |
-| RPM setpoint:     [ 16000 ]   | Prah lozisko:    xx.x C      |
-| Sinusovy proud:   [ 5.0   ]   | Teplota kartace: xx.x C      |
-|                               | Prah kartace:    xx.x C      |
+| [AUTO] [STOP]                 | Teplota lozisko (Akt/Max)    |
+| RPM setpoint:     [ 16000 ]   | Akt: xx.x C  Max: xx.x C     |
+| Sinusovy proud:   [ 5.0   ]   | Teplota kartace (Akt/Max)    |
+|                               | Akt: xx.x C  Max: xx.x C     |
 | [●] VRETENO  RUN CMD          | Aktualni RPM:    xxxxx       |
-| [●] ZDROJ    SINE             | LOG SAVED: YES/NO            |
-| [●] SAFETY   OK               | Duvod blokace: text          |
+| [●] ZDROJ    SINE             | Ujeta vzdalenost [km]: x.xxxx|
+| [●] SAFETY   OK               | LOG SAVED: YES/NO            |
+|                               | Duvod blokace: text          |
 |                               | Last error: text             |
 +-------------------------------+------------------------------+
-| NAV: S1 | S2 | S3 | S4 | S5 | S6 | S7                        |
+| NAV: S1 | S2 | S3 | S4 | S5 | S7                             |
 +--------------------------------------------------------------+
 
 ### Povinné tagy
@@ -64,8 +65,10 @@ Tato obrazovka je hlavní operátorský pohled.
 - `"DB_HMI".Spindle.Speed_RPM`
 - `"DB_HMI".LabPSU.DebugAmplitude_A`
 - `"DB_HMI".Sensors.AI1_Teplota_Lozisko_C`
-- `"DB_Config".TempHighLoziskoThreshold_C`
-- `"DB_Config".TempHighKartaceThreshold_C`
+- `"DB_HMI".Sensors.AI2_Teplota_Kartace_C`
+- `"DB_LogRuntime".MaxTempLozisko_C`
+- `"DB_LogRuntime".MaxTempUhliky_C`
+- `"DB_LogRuntime".UjetaVzdalenost_km`
 - `"DB_HMI".Sensors.TM_Rotation_A_Channel`
 - `"DB_Status".HMI_StatusText`
 - `"DB_Status".HMI_StatusColor`

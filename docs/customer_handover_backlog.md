@@ -1,266 +1,130 @@
-# Backlog pro predani zakaznikovi
-
-Datum: 2026-05-18
-Stav: draft backlog pro dokonceni pred predanim
-
----
-
-## 📅 TODO NA ZÍTRA (2026-07-19)
-
-**Kalibrace LabPSU - verifikace**
-
-- [ ] **Nahrát upravený program do PLC** (domácí setup bez periferií)
-  - Projekt: `tia/vfd-spindel-plc/vfd-spindel-plc.ap20`
-  - User: `admin` / Heslo: `Admin@12345`
-  - Změny v: `plc/program.scl` (FB_LabPSU, řádky ~754-762)
-  - ⚠️ **ZÁLOHA**: Před nahráním zálohovat aktuální verzi PLC programu!
-  
-- [ ] **Oživit TIA Portal** na domácím počítači
-  - Zkontrolovat funkčnost prostředí
-  - Ověřit komunikaci s PLC
-  
-- [ ] **Spustit SAT-04 test** (pokud možné bez HW)
-  - Očekávaná hodnota: `AQ3_CurrentCtrl_V ≈ 2.27V` pro 30A (tolerance ±0.1V)
-  - Původní: 2.5V → Nová: 2.27V (kalibrace 2026-07-18)
-  
-- [ ] **Ověřit výpočet** v online režimu
-  - Pozorovat `DB_Status.LabPSU.CurrentSet_A` vs. `DB_IO.AQ.AQ3_CurrentCtrl_V`
-  - Kontrola: U [V] = (I [A] / 15.92) + 0.383
-  
-- [ ] **Poznámky k dalším prioritám** (doplnit dle potřeby):
-  - **2026-07-22:** Změna DebugFrequency_Hz → DebugPeriod_min (perioda v minutách)
-  - ⚠️ **Breaking change** - po nahrání nastavit LabPSU parametry znovu!
-  - Testovat SAT-06 s periodou 10 min (600s cyklus)
-  - _____________________________________________
-  - _____________________________________________
-
-**Reference:**
-- Dokumentace kalibrace: [labpsu_calibration.md](labpsu_calibration.md)
-- Shrnutí změn: [../KALIBRACE_SUMMARY.md](../KALIBRACE_SUMMARY.md)
-- Test specifikace: [test_specification.md](test_specification.md) - SAT-04
-
----
-
-## Cile predani
-- Zakaznik umi spustit a zastavit test pres HMI.
-- Zakaznik vidi prubeh testu (elapsed time, stavy).
-- Zakaznik umi nastavit parametry laboratorniho zdroje.
-- Zakaznik dostane instalovatelny balicek PLC + HMI bez nutnosti mit TIA Portal.
-- Zakaznik dostane HW seznam (BOM-lite) pro montaz a overeni zapojeni.
-
-## Prioritni backlog
-
-| ID | Tema | Co dodelat | Vystup | Priorita | Stav |
-|---|---|---|---|---|---|
-| HO-01 | HMI Start/Stop | Implementovat tlacitka Auto a Stop s vazbou na PLC tagy (edge/latch dle tabulky) | Funkcni ovladani testu z HMI | P1 | TODO |
-| HO-02 | HMI elapsed time | Zobrazit ubehly cas testu z DB_LogRuntime.Elapsed_s + format mm:ss/hh:mm:ss | Live casovac na HMI | P1 | TODO |
-| HO-03 | HMI LabPSU screen | Udelat obrazovku pro parametry LabPSU (Enable, Mode, ConstCurrent_A, DebugAmplitude_A, DebugPeriod_min) + validace rozsahu | Nastavovaci obrazovka + save/apply | P1 | TODO |
-| HO-04 | Predani PLC bez TIA | Pripravit CPU image/Load memory card postup (nebo commissioning package) + navod krok-za-krokem | Predavaci balicek PLC + navod | P1 | TODO |
-| HO-05 | Predani HMI bez TIA | Pripravit deploy balicek web/HMI (staticke soubory + deploy script + login postup) | ZIP/Repo balicek + navod nasazeni | P1 | TODO |
-| HO-06 | HW seznam | Sestavit a potvrdit seznam HW komponent, kabelaze a signalu | docs/hw_list_for_customer.md | P1 | IN_PROGRESS |
-| HO-07 | CSV zapis merenych hodnot | Implementovat kod pro tvorbu CSV (hlavicka + datove radky), mapovani merenych velicin a formatovani hodnot | Funkcni CSV obsah se skutecnymi daty testu | P1 | TODO |
-| HO-08 | Ukladani CSV na SD | Dokoncit FileOpen/FileWrite/FileClose v FB_LogFlushToSd (aktualne TODO) vcetne flush/final flush | Realny zapis CSV na SD | P1 | TODO |
-| HO-09 | Export CSV zakaznikovi | Definovat a otestovat finalni proces stazeni CSV (SD karta / WebAPI) | Overeny postup + SAT dukaz | P1 | TODO |
-| HO-10 | SAT/FAT evidence | Pripravit test protokoly, screenshoty, PASS/FAIL, datum/cas, verze FW/HMI | Predavaci test report | P2 | TODO |
-| HO-11 | User navod | Strucny user guide pro obsluhu: start testu, stop, nastavovani, stazeni logu, reseni chyb | PDF/MD navod | P2 | TODO |
-| HO-12 | Spindle.Enable master switch | Pridat DB_HMI.Spindle.Enable (master switch) pro konzistentni API vsech bloku a flexibilni ladeni/testovani (vreteno nezavisle na zdroji) | Upraveny DB_HMI + FB_DriveCtrl + HMI obrazovka | P2 | TODO |
-
-## Rozpad podle tvych bodu
+# Aktualni backlog projektu
 
-### 1) Tlacitka na HMI pro zapis/cteni do PLC
-- Vazat na tagy popsane v docs/hmi_tag_table.md.
-- Auto:
-  - latch: DB_LogConfig.Enable=TRUE, DB_HMI.LabPSU.Enable=TRUE
-  - pulse: DB_HMI.Spindle.Start, DB_LogConfig.StartTest
-- Stop:
-  - pulse: DB_HMI.Spindle.Stop, DB_LogConfig.StopTest
-  - latch off: DB_HMI.LabPSU.Enable=FALSE
+Datum aktualizace: 2026-08-16
 
-### 2) Zobrazovani ubehleho casu testu
-- Read-only tag: DB_LogRuntime.Elapsed_s.
-- UI format: mm:ss pod 1h, jinak hh:mm:ss.
-- Pri TestActive=FALSE drzet posledni hodnotu + zobrazit stav "Dokonceno".
+Toto je jediny ridici seznam neuzavrenych ukolu projektu. Historicke nebo neoverene backlogy sem nepatri.
 
-### 3) Screen pro parametry laboratorniho zdroje
-- Povinne pole:
-  - DB_HMI.LabPSU.Enable
-  - DB_HMI.LabPSU.Mode (1=CONST, 2=SINE_DEBUG)
-  - DB_HMI.LabPSU.ConstCurrent_A
+## Pravidla prace
 
----
+- Kazdy ukol je `NOVY`, dokud jeho dokonceni vyslovne nepotvrdi uzivatel.
+- Funkcni overeni probiha pouze na produkcnim PLC. Nepouzivej PLCSIM Advanced ani WinCC jako testovaci prostredi.
+- Pred kazdym commitem zkontroluj tento backlog a vyzadej si od uzivatele potvrzeni, zda je ukol zahrnuty v commitu splnen.
+- Stav ukolu se meni az po zaznamenani overeni nebo rozhodnuti uzivatele.
 
-## Otázky pro zákazníka (před finalizací)
+## P1 - Zakaznik, diagnostika a data
 
-### 1. Emergency Stop chování během testu
-**Otázka:** Co se má stát když obsluha stiskne fyzické E-Stop během probíhającího testu?
-- **Varianta A:** Okamžité vypnutí všeho, log se NEUKLÁDÁ (ztráta dat)
-- **Varianta B:** Okamžité vypnutí, ale PLC stihne flush log na SD (data zachována)
-- **Varianta C:** Soft stop - vřeteno zajede, pak se log uloží, pak vypnutí
+### BL-01 - Zaslat nahledy HMI obrazovek S2-S7 zakaznikovi
 
-**Doporučení:** Varianta B - bezpečnost má přednost, ale zkusit zachránit data
+- Stav: NOVY
+- Cil: Pripravit a odeslat zakaznikovi nahledy obrazovek 2 az 7 k review.
+- Vystup: Sada aktualnich nahledu a soupis pripominek zakaznika.
+- Overeni: Zakaznik potvrdil prijeti nahledu nebo zaslal review.
 
-**Zákaznická odpověď:** _____________________________________________
+### BL-02 - Zapis teplotniho tripu do Last error
 
----
+- Stav: NOVY
+- Cil: Pri prekroceni limitu teploty ulozit citelny duvod do `DB_LogRuntime.LastError`, aby byl viditelny na HMI.
+- Rozsah: Rozlisit alespon limit loziska a limit kartacu; definovat dalsi chyby, ktere se budou logovat do `LastError`.
+- Vystup: Schvalena tabulka chyb a implementovane zapisovani trvalych diagnostickych textu.
+- Overeni: Na produkcnim PLC vyvolat kazdy podporovany trip a overit text na HMI i v zaznamu testu.
 
-### 2. Zobrazení alarmů na HMI
-**Otázka:** Když systém detekuje alarm (překročení teploty, kritické vibrace), jak to má obsluha vidět?
-- **Varianta A:** Červený popup upozornění (musí potvrdit)
-- **Varianta B:** Blikající červený indikátor na obrazovce (nenásilné)
-- **Varianta C:** Jen změna barvy Status Panel + záznam do logu (bez přerušení)
+### BL-03 - Opravit pristup k PLC webserveru z iPhonu
 
-**Sub-otázka:** Má se test při alarmu automaticky zastavit, nebo jen varovat a pokračovat?
+- Stav: NOVY
+- Cil: Zjistit pricinu nefunkcniho pripojeni z iPhonu a obnovit podporovany pristup.
+- Rozsah: HTTPS certifikat a duvera certifikatu, URL/DNS nebo IP, sitova dostupnost, autentizace a kompatibilita Safari.
+- Vystup: Popsana pricina, oprava a kratky postup pro uzivatele iPhonu.
+- Overeni: Uspesne prihlaseni a otevreni webove aplikace z iPhonu v produkcni siti.
 
-**Doporučení:** Popup + automatický stop u kritických alarmů (teplota, vibrace)
+### BL-04 - Stahovani ulozenych CSV logu pres webserver
 
-**Zákaznická odpověď:** _____________________________________________
+- Stav: NOVY
+- Cil: Umoznit prihlasenemu uzivateli zobrazit seznam ulozenych logu na SD karte a stahnout zvoleny CSV soubor.
+- Vystup: Webove rozhrani pro seznam a stazeni plus zdokumentovany WebAPI kontrakt.
+- Overeni: Na produkcnim PLC vytvorit log, najit ho ve webove aplikaci a uspesne jej stahnout a otevrit.
 
----
+### BL-05 - Opravit cas v nazvu a metadatech CSV souboru
 
-### 3. Změna parametrů za běhu testu
-**Otázka:** Může obsluha měnit parametry (otáčky, proud zdroje) během běžícího testu?
-- **Varianta A:** ANO - změny se aplikují okamžitě (flexibilní, ale může narušit měření)
-- **Varianta B:** NE - změny jsou zamčené, musí se zastavit test (bezpečnější)
-- **Varianta C:** ANO, ale s potvrzením "Opravdu chcete změnit za běhu?"
+- Stav: NOVY
+- Cil: Odstranit posun casu priblizne o dve hodiny pri spravnem datu.
+- Rozsah: Zjistit zdroj casu, casovou zonu, letni cas a prevod mezi PLC a Windows/metadaty souboru.
+- Vystup: Jednoznacne pravidlo casove zony a opravene generovani nazvu souboru.
+- Overeni: Na produkcnim PLC porovnat cas ve jmenu CSV, cas v zaznamech a zobrazene metadata souboru ve Windows.
 
-**Doporučení:** Varianta B pro konzistentní výsledky testů
+### BL-06 - Upravit zakaznicky obsah CSV a pridat citelne duvody
 
-**Zákaznická odpověď:** _____________________________________________
+- Stav: NOVY
+- Cil: Zredukovat nebo oddelit troubleshooting hodnoty od zakaznickych dat a ukladat citelne texty misto samotnych ciselnych kodu tam, kde to zlepsi srozumitelnost.
+- Rozsah: Definovat zakaznicke sloupce, technicke diagnosticke sloupce a textove duvody ukonceni testu/tripu.
+- Vystup: Schvalene CSV schema, aktualizovane formatovani a dokumentace vyznamu sloupcu.
+- Overeni: Otevrit vzorovy CSV soubor a bez znalosti kodu rozpoznat duvod ukonceni testu.
 
----
+### BL-07 - Zalogovat vypadek proudu a zobrazit jej obsluze
 
-### 4. Kontrola parametrů před startem testu
-**Otázka:** Co má systém udělat když obsluha stiskne AUTO, ale parametry nejsou nastavené správně?
-- Příklad: Otáčky = 0 RPM nebo Proud = 0 A
+- Stav: NOVY
+- Cil: Detekovat vypadek napajeni nebo proudu, zachovat jeho informaci po restartu a zobrazit ji na HMI a pripadne ve webserveru.
+- Rozsah: Definovat zdroj detekce, retencni priznak, format CSV udalosti a chovani zobrazeni na HMI.
+- Vystup: Schvalena strategie a implementovane zaznamenani udalosti.
+- Overeni: Kontrolovane vyvolat odpovidajici stav na produkcnim PLC a overit CSV, HMI a pripadne webove zobrazeni.
 
-**Varianta A:** Spustit test i tak (může být záměrné)
-**Varianta B:** Zobrazit varování "Otáčky nejsou nastaveny. Pokračovat?" (s možností zrušit)
-**Varianta C:** Blokovat start + zobrazit chybu "Nastavte otáčky před startem"
+### BL-14 - Synchronizace casu pres NTP
 
-**Doporučení:** Varianta B - varování s možností pokračovat
+- Stav: NOVY
+- Cil: Nastavit PLC a HMI pro prijem NTP paketů a synchronizovat cas, aby nazvy CSV souboru a jejich metadata pouzivaly spravny lokalni cas.
+- Rozsah: Konfigurace NTP serveru, sitove dostupnosti, casove zony a letniho casu pro PLC i HMI. Tlacitko `Synchronizovat cas` na S7 vyvola okamzity pozadavek na NTP synchronizaci.
+- Vystup: Zdokumentovana konfigurace NTP, funkcni synchronizace casu ze S7, zobrazeni `Posledni synchronizace` a stav `V PORADKU` nebo `NTP SERVER NEDOSTUPNY`.
+- Overeni: Porovnat cas PLC, HMI a vytvoreneho CSV souboru s referencnim NTP casem ve stejne siti.
 
-**Zákaznická odpověď:** _____________________________________________
+## P2 - Vysledky testu a reportovani
 
----
+### BL-08 - Vypocet celkove ujeté vzdalenosti
 
-### 5. Historie testů na HMI
-**Otázka:** Má HMI zobrazovat seznam předchozích testů?
-- Např.: "Poslední 5 testů: Test_001 (1h 23m), Test_002 (45m), ..."
+- Stav: IMPLEMENTOVANO - NEOVERENO
+- Cil: Vypocitat vzdalenost, kterou uhliky ujely po sberacim krouzku, z doby a skutecnych otacek vretene.
+- Rozsah: Potvrdit efektivni prumer nebo obvod sberaciho krouzku, jednotku kilometru, reset a zobrazeni hodnoty.
+- Vystup: Vypocet v PLC, hodnota v CSV a zobrazeni na HMI.
+- Overeni: Provest TIA Portal compile, test v PLCSIM Advanced s WinCC a finalni FAT na produkcnim PLC; porovnat vypocet s rucnim referencnim vypoctem z RPM, casu a schvaleneho obvodu.
 
-**Varianta A:** ANO - seznam na samostatné obrazovce (History Screen)
-**Varianta B:** NE - historii lze prohlížet jen přes WebAPI nebo SD kartu
-**Varianta C:** Jen základní info: "Poslední test: LOG_260519_143022.csv (dokončeno)"
+### BL-09 - Generovat zakaznicky report ve webserveru
 
-**Doporučení:** Varianta C - minimální info, detaily přes WebAPI
+- Stav: NOVY
+- Cil: Z vybraneho ulozeneho logu vygenerovat report urceny pro koncoveho zakaznika.
+- Rozsah: Definovat format vystupu, vstupni CSV data, chybove stavy a zpusob stazeni.
+- Vystup: Funkce webserveru, ktera vytvori a poskytne report z vybraneho testu.
+- Overeni: Vybrat produkcni CSV, vygenerovat report a overit shodu souhrnnych hodnot s CSV.
 
-**Zákaznická odpověď:** _____________________________________________
+### BL-10 - Pripravit sablonu zakaznickeho reportu
 
----
+- Stav: NOVY
+- Cil: Vytvorit schvalitelnou sablonu reportu pro jeden test.
+- Rozsah: Identifikace testu, casovy rozsah, nastaveni, maximalni teploty, ujetá vzdalenost, duvod ukonceni, vysledek a prilohy nebo grafy podle potvrzenych dat.
+- Vystup: Verzionovana sablona reportu pouzitelna pro BL-09.
+- Overeni: Zakaznik nebo odpovedna osoba schvali obsah a podobu sablony.
 
-### 6. PAUSE funkce pro test
-**Otázka:** Má být možnost test POZASTAVIT (pause) místo úplného zastavení?
-- Příklad použití: Během testu zjistíte špatné měření → PAUSE → oprava senzoru → CONTINUE
-- Log by pokračoval ve stejném souboru
+## P3 - Nizka priorita: mereni proudu a vibraci
 
-**Varianta A:** ANO - přidat tlačítko PAUSE/CONTINUE
-**Varianta B:** NE - jen START a STOP (jednodušší, ale méně flexibilní)
+### BL-11 - Hallova sonda pro skutecny proud do kartacu
 
-**Doporučení:** Varianta B pro první verzi, PAUSE jako nice-to-have pro budoucnost
+- Stav: NOVY
+- Priorita: Velmi nizka
+- Cil: Zprovoznit Hallovu sondu a merit skutecny proud do kartacu.
+- Vystup: Zapojeny a skalibrovany signal, PLC tag, zobrazeni a pripadne logovani.
+- Overeni: Porovnat hodnotu Hallovy sondy s referencnim meridlem v definovanych bodech.
 
-**Zákaznická odpověď:** _____________________________________________
+### BL-12 - Senzor vibraci a mereni v aplikaci
 
----
+- Stav: NOVY
+- Priorita: Velmi nizka
+- Cil: Pridat snimac vibraci a zapojit jeho hodnotu do aplikace.
+- Vystup: Specifikace senzoru, PLC mapovani, zobrazeni, logovani a pripadne alarmove prahy.
+- Overeni: Na produkcnim PLC overit reakci merene hodnoty na referencni vibracni podnet.
 
-### 7. Indikace stavu SD karty
-**Otázka:** Má HMI zobrazovat stav SD karty (volné místo, chyby)?
-- Např.: "SD karta: 1.2 GB free" nebo "SD: ERROR - karta chybí!"
+## P4 - Nejnizsi priorita: akusticka diagnostika
 
-**Varianta A:** ANO - na hlavní obrazovce malý status indikátor
-**Varianta B:** ANO - ale jen na konfigurace obrazovce
-**Varianta C:** NE - chyby SD se zobrazí jen při problému se zápisem
+### BL-13 - Mereni a porovnavani hluku vretene
 
-**Doporučení:** Varianta A - prevence je lepší než řešení problémů
-
-**Zákaznická odpověď:** _____________________________________________
-
----
-
-### 8. Formát času na displeji
-**Otázka:** Jaký formát času preferujete pro zobrazení délky testu?
-- **Varianta A:** Pouze MM:SS pro testy do 1h, pak HH:MM:SS
-- **Varianta B:** Vždy HH:MM:SS (konzistentní)
-- **Varianta C:** Vždy v sekundách (1234 s) - technický přístup
-
-**Doporučení:** Varianta A - lidsky čitelné pro krátké testy
-
-**Zákaznická odpověď:** _____________________________________________
-
----
-
-### 9. WebAPI nebo jen SD karta?
-**Otázka:** Jak bude zákazník primárně stahovat výsledky testů?
-- **Cesta A:** Především WebAPI (stažení přes síť) + SD jako backup
-- **Cesta B:** Především SD karta (fyzické vyjmutí) + WebAPI jako bonus
-
-**Dopad:** Ovlivňuje priority vývoje WebAPI vs. robustnost SD zápisu
-
-**Zákaznická odpověď:** _____________________________________________
-
----
-
-**Termín pro odpovědi:** _____________________  
-**Kontaktní osoba:** _____________________
-  - DB_HMI.LabPSU.DebugAmplitude_A
-  - DB_HMI.LabPSU.DebugPeriod_min
-- Validace rozsahu + disable nepouzitych poli dle rezimu.
-
-### 4) Jak dorucit PLC projekt bez TIA
-- Varianta A (doporucena): predat nahranou Load memory card / image pripraveny k vlozeni do CPU.
-- Varianta B: FAT na predkonfigurovanem PLC (zakaznik pouziva hotove zarizeni, ne projekt).
-- Soucast balicku:
-  - verze CPU FW,
-  - postup uvedeni do provozu,
-  - IP nastaveni,
-  - reset/recovery postup.
-
-### 5) Jak dorucit HMI projekt bez TIA
-- Predat webapp balicek (html/webapp nebo html/webtestapp) + deploy script html/cli_deploy_tool.py.
-- Pridat runbook:
-  - login,
-  - upload,
-  - aktivace app,
-  - smoke test URL.
-
-### 6) Seznam HW do md souboru
-- Viz docs/hw_list_for_customer.md.
-
-### 12) Pridani Spindle.Enable jako master switch
-**Duvod**: Konzistence API + flexibilni ladeni/testovani
-- Soucasne: Spindle se ridi jen Start/Stop pulse (nekonzistentni s LabPSU a Logging, ktere maji Enable)
-- Cil: Vsechny bloky maji stejnou strukturu: Enable (master switch) + Start/Stop (operace)
-- Implementace:
-  - Pridat `DB_HMI.Spindle.Enable : Bool` do struktury
-  - Upravit `FB_DriveCtrl` - pokud `NOT Enable`, vratit State=0 (DISABLED), AQ=0, DO=FALSE
-  - HMI: Checkbox/switch "Enable" nad tlacitky START/STOP
-- Benefit pro zakaznika:
-  - Muze testovat pouze vreteno (Enable=TRUE, LabPSU.Enable=FALSE)
-  - Muze testovat pouze zdroj (Spindle.Enable=FALSE, LabPSU.Enable=TRUE)
-  - Jasna vizualizace, co je aktivni/neaktivni
-  - Bezpecnejsi ladeni - nemuzou se omylem spustit oba systemy naraz
-- Asynchronni start Enable tagu (rozdil 10-200ms) nema vliv na funkcnost (PermitMotion safety zajisti synchronizaci)
-
-### 7) Implementace kodu pro zapis namerenych hodnot do CSV
-- Dopsat FB/FC logiku pro:
-  - CSV hlavicku,
-  - zapis jednotlivych trend vzorku,
-  - jednotny decimal separator a oddelovac,
-  - finalni flush pri timeout/stop/chybe.
-- Overit, ze CSV obsahuje skutecne hodnoty: t_s, RPM, T_Lozisko, T_Uhliky, Vibrace, ProudUhliky, State, RunLatched, TripActive, TripCode, SafetyText.
-
-## Definition of Done pro predani
-- HMI Auto/Stop funkcni na realnem PLC.
-- Elapsed time korektne zobrazen po celou dobu testu.
-- Parametry LabPSU nastavitelne a projevi se v PLC stavech.
-- Zakaznik ma postup nasazeni PLC i HMI bez TIA.
-- CSV log je vytvoren na SD a je overene predani souboru zakaznikovi.
-- HW seznam je potvrzeny a souhlasi s realnou instalaci.
+- Stav: NOVY
+- Cil: Merit hluk vretene a upozornit na odchylku od historickeho mereni pri stejnych otackach, zejmena jako pomocnou diagnostiku lozisek.
+- Rozsah: Vybrat metodu snimani, referencni podminky, metriky, ukladani baseline a prah vyznamne odchylky.
+- Vystup: Navrh diagnostiky a rozhodnuti, zda je implementace technicky a provozne prinosna.
+- Overeni: Opakovane srovnavaci mereni za definovanych podminek.

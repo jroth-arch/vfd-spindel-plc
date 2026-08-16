@@ -412,7 +412,7 @@
             <span class="tiny-label">Akt:</span>
             <div class="value current-temp"><span id="temp">36.4</span><span class="unit">C</span></div>
             <span class="tiny-label">Max:</span>
-            <input id="tempLimitInput" class="small-input" type="number" min="0" max="100" step="0.1" value="75.0" />
+            <div class="value current-temp"><span id="maxTemp">0.0</span><span class="unit">C</span></div>
             <span class="unit">C</span>
           </div>
         </div>
@@ -423,7 +423,7 @@
             <span class="tiny-label">Akt:</span>
             <div class="value current-temp"><span id="brushTemp">34.8</span><span class="unit">C</span></div>
             <span class="tiny-label">Max:</span>
-            <input id="brushTempLimitInput" class="small-input" type="number" min="0" max="100" step="0.1" value="75.0" />
+            <div class="value current-temp"><span id="maxBrushTemp">0.0</span><span class="unit">C</span></div>
             <span class="unit">C</span>
           </div>
         </div>
@@ -431,6 +431,11 @@
         <div class="row">
           <label>Aktualni RPM</label>
           <div class="value"><span id="actualRpm">0</span></div>
+        </div>
+
+        <div class="row">
+          <label>Ujeta vzdalenost [km]</label>
+          <div class="value"><span id="travelDistance">0.0000</span></div>
         </div>
 
         <div class="row">
@@ -450,7 +455,6 @@
         <button class="nav">S3</button>
         <button class="nav">S4</button>
         <button class="nav">S5</button>
-        <button class="nav">S6</button>
         <button class="nav">S7</button>
       </nav>
     </div>
@@ -467,13 +471,14 @@
     const autoBtn = document.getElementById("autoBtn");
     const stopBtn = document.getElementById("stopBtn");
     const rpmInput = document.getElementById("rpm");
-    const tempLimitInput = document.getElementById("tempLimitInput");
-    const brushTempLimitInput = document.getElementById("brushTempLimitInput");
     const actualRpm = document.getElementById("actualRpm");
+    const travelDistance = document.getElementById("travelDistance");
     const logSaved = document.getElementById("logSaved");
     const lastError = document.getElementById("lastError");
     const tempEl = document.getElementById("temp");
     const brushTempEl = document.getElementById("brushTemp");
+    const maxTempEl = document.getElementById("maxTemp");
+    const maxBrushTempEl = document.getElementById("maxBrushTemp");
     const spindleLamp = document.getElementById("spindleLamp");
     const spindleState = document.getElementById("spindleState");
     const psuLamp = document.getElementById("psuLamp");
@@ -487,6 +492,9 @@
     let mode = "READY";
     let testActive = false;
     let elapsedSec = 0;
+    const bearingTripLimit = 75.0;
+    const brushTripLimit = 75.0;
+    const ringDiameterMm = 100.0;
 
     function setStatus(next) {
       mode = next;
@@ -553,6 +561,8 @@
       const sp = Number(rpmInput.value) || 0;
       const measured = sp > 0 ? Math.max(0, Math.round(sp * 0.985 + (Math.random() * 60 - 30))) : 0;
       actualRpm.textContent = String(measured);
+      const distanceIncrementKm = (measured * Math.PI * ringDiameterMm) / 60000000;
+      travelDistance.textContent = (Number(travelDistance.textContent) + distanceIncrementKm).toFixed(4);
 
       if (sp === 0) {
         setStatus("WARNING");
@@ -567,6 +577,9 @@
       testActive = true;
       elapsedSec = 0;
       timerEl.textContent = formatTimer(elapsedSec);
+      maxTempEl.textContent = "0.0";
+      maxBrushTempEl.textContent = "0.0";
+      travelDistance.textContent = "0.0000";
       setLogSaved(false);
       lastError.textContent = "-";
       setSignals("RUN CMD", "SINE", "OK");
@@ -589,20 +602,6 @@
       updateRunningVisuals();
     });
 
-    tempLimitInput.addEventListener("input", () => {
-      const value = Number(tempLimitInput.value);
-      if (Number.isNaN(value)) return;
-      if (value > 100) tempLimitInput.value = "100";
-      if (value < 0) tempLimitInput.value = "0";
-    });
-
-    brushTempLimitInput.addEventListener("input", () => {
-      const value = Number(brushTempLimitInput.value);
-      if (Number.isNaN(value)) return;
-      if (value > 100) brushTempLimitInput.value = "100";
-      if (value < 0) brushTempLimitInput.value = "0";
-    });
-
     setInterval(() => {
       if (!testActive) return;
       elapsedSec += 1;
@@ -612,19 +611,19 @@
       const t = Number(tempEl.textContent);
       const next = Math.max(20, Math.min(95, t + (Math.random() * 0.6 - 0.2)));
       tempEl.textContent = next.toFixed(1);
+      maxTempEl.textContent = Math.max(Number(maxTempEl.textContent), next).toFixed(1);
       const b = Number(brushTempEl.textContent);
       const nextBrush = Math.max(20, Math.min(95, b + (Math.random() * 0.7 - 0.25)));
       brushTempEl.textContent = nextBrush.toFixed(1);
-      const limit = Number(tempLimitInput.value) || 75;
-      const brushLimit = Number(brushTempLimitInput.value) || 75;
+      maxBrushTempEl.textContent = Math.max(Number(maxBrushTempEl.textContent), nextBrush).toFixed(1);
 
-      if (next > limit) {
+      if (next > bearingTripLimit) {
         testActive = false;
         setStatus("TRIP");
         setLogSaved(false);
         lastError.textContent = "Bearing temperature alarm";
         setSignals("TRIP", "TRIP", "TRIP");
-      } else if (nextBrush > brushLimit) {
+      } else if (nextBrush > brushTripLimit) {
         testActive = false;
         setStatus("TRIP");
         setLogSaved(false);

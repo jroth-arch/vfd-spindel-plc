@@ -10,9 +10,9 @@
 - **Event log**: záznam pouze událostí (start, stop, trip, reset, timeout, chyba...) – v bufferech připraven, zápis na SD ve fázi 3
 
 ## Trend log – struktura CSV
-| t_s | RPM | T_Lozisko | T_Uhliky | Vibrace | ProudUhliky | State | RunLatched | TripActive | TripCode | SafetyText | TestActive | StopReason |
-|-----|-----|-----------|----------|---------|-------------|-------|------------|------------|----------|------------|------------|------------|
-| 0.00 | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | 1 | 0 |
+| t_s | RPM | T_Lozisko | T_Uhliky | Vibrace | ProudUhliky | UjetaVzdalenost_km | State | RunLatched | TripActive | TripCode | SafetyText | TestActive | StopReason |
+|-----|-----|-----------|----------|---------|-------------|--------------------|-------|------------|------------|----------|------------|------------|------------|
+| 0.00 | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | ... | 1 | 0 |
 
 - **t_s**: čas od startu testu v sekundách (Real, akumulovaný)
 - **RPM**: skutečné otáčky vřetene (z TM_Counter)
@@ -20,6 +20,7 @@
 - **T_Uhliky**: teplota uhlíků (°C) – zatím 0.0, TODO napojit senzor
 - **Vibrace**: aktuální hodnota vibrací – zatím 0.0, TODO napojit senzor
 - **ProudUhliky**: skutečný proud do uhlíků (A, přepočítán z AQ1_CurrentCtrl_V)
+- **UjetaVzdalenost_km**: akumulovana vzdalenost po sberacim krouzku (km), pocitana z aktualnich RPM a `PrumerKrouzku_mm`
 - **State**: stav vřetene (číselně, viz tabulka níže)
 - **RunLatched**: 0/1 (vřeteno v chodu)
 - **TripActive**: 0/1 (safety trip aktivní)
@@ -92,6 +93,7 @@ T_Lozisko    : Real
 T_Uhliky     : Real
 Vibrace      : Real
 ProudUhliky  : Real
+UjetaVzdalenost_km : Real
 State        : USInt
 RunLatched   : Bool
 TripActive   : Bool

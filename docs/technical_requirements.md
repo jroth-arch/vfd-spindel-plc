@@ -36,7 +36,7 @@ TR-SD-01 Pojmenovani souboru
 TR-SD-02 Obsah CSV souboru
 Soubor vzdy zacina hlavickou:
 ```
-t_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,State,RunLatched,TripActive,TripCode,SafetyText
+t_s,RPM,T_Lozisko,T_Uhliky,Vibrace,ProudUhliky,UjetaVzdalenost_km,State,RunLatched,TripActive,TripCode,SafetyText
 ```
 Nasleduji radky trend dat. Separatorem je carka, desetinnou tecka.
 
@@ -106,6 +106,7 @@ TR-UDT-01 UDT_LogRecord (jeden trend vzorek)
 | T_Uhliky    | Real       | Teplota uhliku [°C]                        |
 | Vibrace     | Real       | Vibrace [engineering units]                |
 | ProudUhliky | Real       | Proud do uhliku [A]                        |
+| UjetaVzdalenost_km | Real  | Ujeta vzdalenost po sberacim krouzku [km] |
 | State       | USInt      | Stav vretene (0=STOPPED,1=RUN,2=STOP,3=TRIP) |
 | RunLatched  | Bool       | Vreteno latchovane v chodu                 |
 | TripActive  | Bool       | Safety trip aktivni                        |
